@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: intellimaint-timescaledb
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: intellimaint
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-IntelliMaint2024!}
+      POSTGRES_DB: intellimaint
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intellimaint"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=128MB
+      -c work_mem=16MB
+      -c max_connections=100
+      -c wal_buffers=8MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+
+volumes:
+  timescaledb_data:
+    driver: local

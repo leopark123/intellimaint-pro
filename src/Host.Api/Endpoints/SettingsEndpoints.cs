@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using IntelliMaint.Core.Abstractions;
 using IntelliMaint.Core.Contracts;
-using IntelliMaint.Infrastructure.Sqlite;
+using IntelliMaint.Host.Api.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -46,41 +46,36 @@ public static class SettingsEndpoints
             .RequireAuthorization(AuthPolicies.AdminOnly);
     }
 
-    private static async Task<IResult> GetSystemInfoAsync(
-        [FromServices] IDbExecutor db,
-        [FromServices] ISqliteConnectionFactory connFactory,
+    private static Task<IResult> GetSystemInfoAsync(
+        [FromServices] StatsCacheService statsCache,
+        [FromServices] ITimeSeriesDb timeSeriesDb,
         [FromServices] IConfiguration config,
         CancellationToken ct)
     {
-        // 统计数据（注意：不在 ExecuteScalarAsync<long> 返回值上使用 ?? 0）
-        var totalTelemetry = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM telemetry;", null, ct);
-        var totalAlarms = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM alarm;", null, ct);
-        var totalDevices = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM device;", null, ct);
-        var totalTags = await db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM tag;", null, ct);
-
-        // 数据库大小：PRAGMA page_count * page_size
-        var pageCount = await db.ExecuteScalarAsync<long>("PRAGMA page_count;", null, ct);
-        var pageSize = await db.ExecuteScalarAsync<long>("PRAGMA page_size;", null, ct);
-        var dbSize = pageCount * pageSize;
+        // v56.1: 使用缓存的统计数据，避免每次请求都执行 COUNT(*) 全表扫描
+        var cached = statsCache.GetStats();
 
         var edgeId = config["Edge:EdgeId"] ?? "unknown";
-        var dbPath = connFactory.DatabasePath;
+        var dbProvider = config["DatabaseProvider"] ?? "Sqlite";
+        var dbPath = dbProvider.Equals("TimescaleDb", StringComparison.OrdinalIgnoreCase)
+            ? config["ConnectionStrings:TimescaleDb"] ?? "TimescaleDB"
+            : config["Edge:DatabasePath"] ?? "unknown";
 
         var info = new SystemInfo
         {
             Version = "1.0.0",
             EdgeId = edgeId,
-            DatabasePath = Path.GetFullPath(dbPath),
-            DatabaseSizeBytes = dbSize,
+            DatabasePath = dbPath,
+            DatabaseSizeBytes = cached.DatabaseSizeBytes,
             UptimeSeconds = (long)(DateTimeOffset.UtcNow - StartTime).TotalSeconds,
             StartTime = StartTime,
-            TotalTelemetryPoints = totalTelemetry,
-            TotalAlarms = totalAlarms,
-            TotalDevices = totalDevices,
-            TotalTags = totalTags
+            TotalTelemetryPoints = cached.TotalTelemetryPoints,
+            TotalAlarms = cached.TotalAlarms,
+            TotalDevices = cached.TotalDevices,
+            TotalTags = cached.TotalTags
         };
 
-        return Results.Ok(ApiResponse<SystemInfo>.Ok(info));
+        return Task.FromResult(Results.Ok(ApiResponse<SystemInfo>.Ok(info)));
     }
 
     private static async Task<IResult> GetAllSettingsAsync(
@@ -128,7 +123,7 @@ public static class SettingsEndpoints
         [FromServices] ITelemetryRepository telemetryRepo,
         [FromServices] IAlarmRepository alarmRepo,
         [FromServices] IHealthSnapshotRepository healthRepo,
-        [FromServices] IDbExecutor db,
+        [FromServices] ITimeSeriesDb timeSeriesDb,
         [FromServices] IAuditLogRepository auditRepo,
         HttpContext httpContext,
         CancellationToken ct)
@@ -147,22 +142,21 @@ public static class SettingsEndpoints
         var alarmCutoff = now - alarmDays * 24L * 60 * 60 * 1000;
         var healthCutoff = now - healthDays * 24L * 60 * 60 * 1000;
 
-        // 清理前大小
-        var beforePageCount = await db.ExecuteScalarAsync<long>("PRAGMA page_count;", null, ct);
-        var pageSize = await db.ExecuteScalarAsync<long>("PRAGMA page_size;", null, ct);
-        var beforeSize = beforePageCount * pageSize;
+        // v56.2: 使用 ITimeSeriesDb 获取数据库大小（支持 SQLite 和 TimescaleDB）
+        var beforeStats = await timeSeriesDb.GetStatisticsAsync(ct);
+        var beforeSize = beforeStats.DatabaseSizeBytes;
 
         // 执行清理
         var deletedTelemetry = await telemetryRepo.DeleteBeforeAsync(telemetryCutoff, ct);
         var deletedAlarms = await alarmRepo.DeleteBeforeAsync(alarmCutoff, ct);
         var deletedHealth = await healthRepo.DeleteBeforeAsync(healthCutoff, ct);
 
-        // VACUUM 释放空间
-        await db.ExecuteNonQueryAsync("VACUUM;", null, ct);
+        // v56.2: 执行数据库维护（SQLite: VACUUM, TimescaleDB: ANALYZE）
+        await timeSeriesDb.PerformMaintenanceAsync(new MaintenanceOptions { Vacuum = true }, ct);
 
         // 清理后大小
-        var afterPageCount = await db.ExecuteScalarAsync<long>("PRAGMA page_count;", null, ct);
-        var afterSize = afterPageCount * pageSize;
+        var afterStats = await timeSeriesDb.GetStatisticsAsync(ct);
+        var afterSize = afterStats.DatabaseSizeBytes;
 
         var result = new CleanupResult
         {
@@ -175,7 +169,7 @@ public static class SettingsEndpoints
         Log.Information(
             "Cleanup done. telemetry={DeletedTelemetry}, alarms={DeletedAlarms}, health={DeletedHealth}, freedBytes={FreedBytes}",
             result.DeletedTelemetryPoints, result.DeletedAlarms, result.DeletedHealthSnapshots, result.FreedBytes);
-        
+
         await AuditLogHelper.LogAsync(auditRepo, httpContext, "data.cleanup", "system", null,
             $"Cleanup executed. DeletedTelemetry={result.DeletedTelemetryPoints}, DeletedAlarms={result.DeletedAlarms}, DeletedHealth={result.DeletedHealthSnapshots}, FreedBytes={result.FreedBytes}", ct);
 
