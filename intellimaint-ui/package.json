@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^5.3.7",
-    "@microsoft/signalr": "^8.0.7",
+    "@microsoft/signalr": "^10.0.0",
     "antd": "^5.20.0",
     "axios": "^1.7.7",
     "dayjs": "^1.11.10",
