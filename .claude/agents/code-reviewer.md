@@ -210,6 +210,48 @@ const data: DeviceDto = await fetchData();
 const items: DeviceDto[] = response.data;
 ```
 
+## ⚠️ 关键原则：证据驱动审查
+
+**绝对禁止**：基于假设或常见模式报告问题，必须用实际代码证据支持每一个发现。
+
+### 验证流程（必须遵守）
+
+```
+报告问题前必须完成：
+1. 读取相关文件 → 使用 Read 工具获取完整代码
+2. 搜索关键字   → 使用 Grep 确认问题存在
+3. 引用代码行   → 必须包含文件路径:行号和代码片段
+4. 分类置信度   → 区分"确认存在"和"潜在风险"
+```
+
+### 问题分类规则
+
+| 类型 | 要求 | 示例 |
+|------|------|------|
+| **确认问题** | 必须提供代码片段证据 | "文件 X:45 行存在 `{代码}`" |
+| **潜在风险** | 必须标注"未验证" | "⚠️ 未验证：可能存在 X 风险" |
+| **建议优化** | 可以基于最佳实践 | "建议：考虑使用 X 模式" |
+
+### ❌ 错误示例（禁止）
+```markdown
+发现问题:
+1. 日志中可能记录了密码  ← 未读取代码就报告
+2. JWT 密钥可能未验证   ← 假设性结论
+```
+
+### ✅ 正确示例（要求）
+```markdown
+发现问题:
+1. **确认**: `src/Auth.cs:45` 存在密码日志
+   ```csharp
+   _logger.LogWarning("Login failed, password: {Password}", password);
+   ```
+
+2. **未验证**: JWT 密钥验证
+   - 需要检查文件: JwtService.cs, Program.cs
+   - 状态: 待验证后确认
+```
+
 ## 审查报告模板
 
 ```markdown
@@ -223,18 +265,30 @@ const items: DeviceDto[] = response.data;
 
 ## 发现问题
 
-### 🔴 Critical (必须修复)
-1. **第 45 行**: SQL 注入风险
-   - 问题: 直接拼接用户输入到 SQL
+### 🔴 Critical (必须修复) - 已验证
+1. **src/xxx.cs:45**: SQL 注入风险
+   ```csharp
+   // 实际代码片段
+   var sql = $"SELECT * FROM Users WHERE Name = '{name}'";
+   ```
    - 建议: 使用参数化查询
 
-### 🟡 Warning (建议修复)
-2. **第 78 行**: 缺少空检查
-   - 问题: `device` 可能为 null
+### 🟡 Warning (建议修复) - 已验证
+2. **src/xxx.cs:78**: 缺少空检查
+   ```csharp
+   // 实际代码片段
+   var name = user.Name; // user 可能为 null
+   ```
    - 建议: 添加 null 检查
 
+### ⚠️ 待验证 (需进一步检查)
+3. **可能存在**: 敏感信息日志
+   - 待检查文件: AuthService.cs, UserService.cs
+   - 验证方法: `grep "Log.*password" src/`
+   - 状态: 未确认
+
 ### 🟢 Info (可选优化)
-3. **第 120-180 行**: 方法过长
+4. **第 120-180 行**: 方法过长
    - 问题: 方法超过 60 行
    - 建议: 拆分为多个小方法
 
@@ -245,6 +299,13 @@ const items: DeviceDto[] = response.data;
 
 ## 总结
 代码质量良好，修复 Critical 问题后可以合并。
+
+## 验证记录
+| 检查项 | 文件 | 结果 |
+|--------|------|------|
+| SQL 注入 | DeviceRepo.cs | ✅ 已检查，使用参数化 |
+| 密码日志 | AuthService.cs | ✅ 已检查，无泄露 |
+| JWT 验证 | JwtService.cs | ✅ 已检查，有验证逻辑 |
 ```
 
 ## 审查流程
