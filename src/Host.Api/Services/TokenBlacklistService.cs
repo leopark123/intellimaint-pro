@@ -5,6 +5,16 @@ namespace IntelliMaint.Host.Api.Services;
 /// <summary>
 /// Token 黑名单服务 - 用于立即失效已登出或被禁用用户的 Token
 /// 使用内存缓存存储被黑名单的用户ID和时间戳
+///
+/// 设计说明：
+/// - 黑名单基于用户ID而非单个Token，更高效
+/// - 通过比较Token签发时间和黑名单时间判断有效性
+/// - 黑名单有效期略长于Access Token有效期（20分钟 vs 15分钟）
+///
+/// 生产环境注意：
+/// - 单实例部署：当前实现足够（服务重启后最多15分钟内旧Token仍有效）
+/// - 多实例部署：应迁移到 Redis 分布式缓存确保黑名单同步
+///   示例：services.AddStackExchangeRedisCache(options => ...)
 /// </summary>
 public sealed class TokenBlacklistService
 {

@@ -13,10 +13,9 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
   </ItemGroup>
 
+  <!-- v56.2: Application 层仅依赖 Core 层（Clean Architecture） -->
   <ItemGroup>
     <ProjectReference Include="..\Core\IntelliMaint.Core.csproj" />
-    <ProjectReference Include="..\Infrastructure\Sqlite\IntelliMaint.Infrastructure.Sqlite.csproj" />
-    <ProjectReference Include="..\Infrastructure\Pipeline\IntelliMaint.Infrastructure.Pipeline.csproj" />
   </ItemGroup>
 
 </Project>
