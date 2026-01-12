@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IntelliMaint.Tests.Integration;
 
@@ -22,11 +24,24 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Sqlite:DatabasePath"] = _dbPath
+                ["Edge:DatabasePath"] = _dbPath,  // Fixed: EdgeOptions uses "Edge" section
+                ["Edge:EdgeId"] = "test-edge"     // Required property
             });
         });
 
         builder.UseEnvironment("Testing");
+
+        // Configure test authentication to bypass JWT
+        builder.ConfigureServices(services =>
+        {
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+                options.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+            })
+            .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
+                TestAuthHandler.SchemeName, options => { });
+        });
     }
 
     protected override void Dispose(bool disposing)

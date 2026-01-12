@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react'
 import {
   Button,
   Card,
+  Checkbox,
+  Collapse,
   Form,
   Input,
   message,
@@ -18,7 +20,8 @@ import type { ColumnsType } from 'antd/es/table'
 import { PlusOutlined, KeyOutlined } from '@ant-design/icons'
 import type { User, CreateUserRequest, UpdateUserRequest, ResetPasswordRequest } from '../../types/user'
 import { UserRoleOptions } from '../../types/user'
-import { getUsers, createUser, updateUser, disableUser, resetPassword } from '../../api/user'
+import { getUsers, createUser, updateUser, disableUser, enableUser, resetPassword } from '../../api/user'
+import { CheckOutlined, StopOutlined } from '@ant-design/icons'
 
 type Mode = 'create' | 'edit'
 
@@ -31,7 +34,7 @@ function formatUtcMs(ms: number | null) {
   }
 }
 
-function getRoleColor(role: string): string {
+function getRoleTagColor(role: string): string {
   switch (role) {
     case 'Admin': return 'red'
     case 'Operator': return 'blue'
@@ -40,9 +43,53 @@ function getRoleColor(role: string): string {
   }
 }
 
+function getRoleTextColor(role: string): string {
+  switch (role) {
+    case 'Admin': return '#cf1322'
+    case 'Operator': return '#1677ff'
+    case 'Viewer': return '#389e0d'
+    default: return '#666'
+  }
+}
+
 function getRoleLabel(role: string): string {
   const option = UserRoleOptions.find(o => o.value === role)
   return option?.label ?? role
+}
+
+// 角色权限配置
+const rolePermissions: Record<string, { description: string; permissions: string[] }> = {
+  Admin: {
+    description: '管理员 - 拥有系统全部权限',
+    permissions: [
+      '用户管理（创建、编辑、禁用用户）',
+      '设备管理（添加、编辑、删除设备）',
+      '告警规则配置',
+      '系统设置管理',
+      '查看审计日志',
+      '数据查询与导出',
+      '实时监控'
+    ]
+  },
+  Operator: {
+    description: '操作员 - 日常运维操作权限',
+    permissions: [
+      '设备管理（添加、编辑设备）',
+      '告警确认与处理',
+      '告警规则配置',
+      '数据查询与导出',
+      '实时监控'
+    ]
+  },
+  Viewer: {
+    description: '观察者 - 只读查看权限',
+    permissions: [
+      '查看设备列表',
+      '查看告警信息',
+      '数据查询（只读）',
+      '实时监控（只读）'
+    ]
+  }
 }
 
 export default function UserManagement() {
@@ -56,6 +103,7 @@ export default function UserManagement() {
   const [resetModalOpen, setResetModalOpen] = useState(false)
   const [resetUserId, setResetUserId] = useState<string | null>(null)
   const [resetUsername, setResetUsername] = useState<string>('')
+  const [selectedRole, setSelectedRole] = useState<string>('Viewer')
 
   const [form] = Form.useForm()
   const [resetForm] = Form.useForm()
@@ -85,6 +133,7 @@ export default function UserManagement() {
     setModalMode('create')
     setCurrent(null)
     form.resetFields()
+    setSelectedRole('Viewer')
     setModalOpen(true)
   }
 
@@ -97,6 +146,7 @@ export default function UserManagement() {
       role: record.role,
       enabled: record.enabled
     })
+    setSelectedRole(record.role)
     setModalOpen(true)
   }
 
@@ -161,6 +211,20 @@ export default function UserManagement() {
     }
   }
 
+  const handleEnable = async (record: User) => {
+    try {
+      const resp = await enableUser(record.userId)
+      if (!resp.success) {
+        message.error(resp.error ?? '启用失败')
+        return
+      }
+      message.success('用户已启用')
+      load()
+    } catch (e: any) {
+      message.error(e?.message ?? '启用失败')
+    }
+  }
+
   const handleResetPassword = async () => {
     try {
       const values = await resetForm.validateFields()
@@ -202,7 +266,7 @@ export default function UserManagement() {
       key: 'role',
       width: 100,
       render: (role: string) => (
-        <Tag color={getRoleColor(role)}>{getRoleLabel(role)}</Tag>
+        <Tag color={getRoleTagColor(role)}>{getRoleLabel(role)}</Tag>
       )
     },
     {
@@ -233,7 +297,7 @@ export default function UserManagement() {
     {
       title: '操作',
       key: 'actions',
-      width: 200,
+      width: 260,
       render: (_, record) => (
         <Space size="small">
           <Button size="small" onClick={() => openEdit(record)}>
@@ -246,15 +310,26 @@ export default function UserManagement() {
           >
             重置密码
           </Button>
-          {record.enabled && (
+          {record.enabled ? (
             <Popconfirm
               title="确定要禁用该用户吗？"
               onConfirm={() => handleDisable(record)}
               okText="确定"
               cancelText="取消"
             >
-              <Button size="small" danger>
+              <Button size="small" danger icon={<StopOutlined />}>
                 禁用
+              </Button>
+            </Popconfirm>
+          ) : (
+            <Popconfirm
+              title="确定要启用该用户吗？"
+              onConfirm={() => handleEnable(record)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button size="small" type="primary" ghost icon={<CheckOutlined />}>
+                启用
               </Button>
             </Popconfirm>
           )}
@@ -314,10 +389,11 @@ export default function UserManagement() {
               label="密码"
               rules={[
                 { required: true, message: '请输入密码' },
-                { min: 6, message: '密码至少6个字符' }
+                { min: 8, message: '密码至少8个字符' },
+                { pattern: /^(?=.*[A-Za-z])(?=.*\d).+$/, message: '密码必须包含字母和数字' }
               ]}
             >
-              <Input.Password placeholder="请输入密码" />
+              <Input.Password placeholder="请输入密码（至少8位，含字母和数字）" />
             </Form.Item>
           )}
 
@@ -333,8 +409,35 @@ export default function UserManagement() {
             label="角色"
             rules={[{ required: true, message: '请选择角色' }]}
           >
-            <Select options={UserRoleOptions} placeholder="请选择角色" />
+            <Select
+              options={UserRoleOptions}
+              placeholder="请选择角色"
+              onChange={(value) => setSelectedRole(value)}
+            />
           </Form.Item>
+
+          {/* 权限说明 */}
+          {selectedRole && rolePermissions[selectedRole] && (
+            <div style={{
+              marginBottom: 16,
+              padding: 12,
+              background: 'var(--color-bg-subtle, #f5f5f5)',
+              borderRadius: 8,
+              border: '1px solid var(--color-border, #e8e8e8)'
+            }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: getRoleTextColor(selectedRole) }}>
+                {rolePermissions[selectedRole].description}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted, #666)' }}>
+                <div style={{ marginBottom: 4 }}>权限列表：</div>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {rolePermissions[selectedRole].permissions.map((perm, idx) => (
+                    <li key={idx} style={{ marginBottom: 2 }}>{perm}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {modalMode === 'edit' && (
             <Form.Item
@@ -363,10 +466,11 @@ export default function UserManagement() {
             label="新密码"
             rules={[
               { required: true, message: '请输入新密码' },
-              { min: 6, message: '密码至少6个字符' }
+              { min: 8, message: '密码至少8个字符' },
+              { pattern: /^(?=.*[A-Za-z])(?=.*\d).+$/, message: '密码必须包含字母和数字' }
             ]}
           >
-            <Input.Password placeholder="请输入新密码" />
+            <Input.Password placeholder="请输入新密码（至少8位，含字母和数字）" />
           </Form.Item>
           <Form.Item
             name="confirmPassword"

@@ -36,7 +36,7 @@ public sealed class FeatureExtractor : IFeatureExtractor
             null, 
             startTs, 
             endTs, 
-            10000, // 最多 10000 个点
+            2000, // v56.2: 降低到 2000 提升性能
             ct);
 
         if (points.Count == 0)

@@ -1,6 +1,6 @@
 using FluentAssertions;
 using IntelliMaint.Core.Contracts;
-using IntelliMaint.Host.Api.Services;
+using IntelliMaint.Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

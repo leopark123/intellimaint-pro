@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   DatePicker,
+  Descriptions,
   Dropdown,
   Form,
   Input,
@@ -15,16 +16,27 @@ import {
   message,
   Statistic,
   Row,
-  Col
+  Col,
+  Progress,
+  Tooltip
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { DownloadOutlined } from '@ant-design/icons'
+import {
+  DownloadOutlined,
+  AlertOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  WarningOutlined,
+  FireOutlined,
+  SyncOutlined
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
+import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { getDevices } from '../../api/device'
-import { ackAlarm, closeAlarm, createAlarm, getAlarmStats, queryAlarms } from '../../api/alarm'
+import { ackAlarm, closeAlarm, createAlarm, getAlarmStats, getAlarmGroupStats, getAlarmTrend, queryAlarms } from '../../api/alarm'
 import { exportAlarmsCsv, exportAlarmsXlsx } from '../../api/export'
 import type { Device } from '../../types/device'
-import type { Alarm, AlarmQuery } from '../../types/alarm'
+import type { Alarm, AlarmQuery, AlarmTrendPoint, AlarmGroupStats } from '../../types/alarm'
 import { SeverityOptions, StatusOptions } from '../../types/alarm'
 
 const { RangePicker } = DatePicker
@@ -50,6 +62,11 @@ export default function AlarmManagement() {
   const [totalCount, setTotalCount] = useState(0)
   const [openCount, setOpenCount] = useState(0)
 
+  // v62: 增强的统计和趋势数据
+  const [groupStats, setGroupStats] = useState<AlarmGroupStats>({ openCount: 0, acknowledgedCount: 0, closedCount: 0 })
+  const [trendData, setTrendData] = useState<AlarmTrendPoint[]>([])
+  const [refreshing, setRefreshing] = useState(false)
+
   const [filters, setFilters] = useState<AlarmQuery>({
     limit: 100
   })
@@ -68,6 +85,10 @@ export default function AlarmManagement() {
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [createForm] = Form.useForm()
 
+  // 详情模态框
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [detailAlarm, setDetailAlarm] = useState<Alarm | null>(null)
+
   const loadDevices = useCallback(async () => {
     try {
       const deviceList = await getDevices()
@@ -81,9 +102,31 @@ export default function AlarmManagement() {
 
   const loadStats = useCallback(async (deviceId?: string) => {
     try {
-      const res = await getAlarmStats(deviceId)
+      const [statsRes, groupStatsRes] = await Promise.all([
+        getAlarmStats(deviceId),
+        getAlarmGroupStats()
+      ])
+      if (statsRes.success && statsRes.data) {
+        setOpenCount(statsRes.data.openCount ?? 0)
+      }
+      if (groupStatsRes.success && groupStatsRes.data) {
+        setGroupStats(groupStatsRes.data)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }, [])
+
+  const loadTrend = useCallback(async (deviceId?: string) => {
+    try {
+      const res = await getAlarmTrend(7, deviceId)
       if (res.success && res.data) {
-        setOpenCount(res.data.openCount ?? 0)
+        // 转换数据格式用于图表
+        const chartData = res.data.map(p => ({
+          ...p,
+          time: dayjs(p.bucket).format('MM-DD HH:mm')
+        }))
+        setTrendData(chartData as any)
       }
     } catch (err) {
       console.error(err)
@@ -109,14 +152,17 @@ export default function AlarmManagement() {
       setNextToken(res.data.nextToken || undefined)
       setTotalCount(res.data.totalCount || 0)
 
-      await loadStats(q.deviceId)
+      await Promise.all([
+        loadStats(q.deviceId),
+        loadTrend(q.deviceId)
+      ])
     } catch (err) {
       console.error(err)
       message.error('查询告警失败')
     } finally {
       setLoading(false)
     }
-  }, [loadStats])
+  }, [loadStats, loadTrend])
 
   const loadNextPage = useCallback(async () => {
     if (!hasMore || !nextToken) return
@@ -148,7 +194,7 @@ export default function AlarmManagement() {
     void loadFirstPage()
   }, [loadDevices, loadFirstPage])
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = useCallback(async () => {
     const params = {
       deviceId: filters.deviceId,
       status: filters.status,
@@ -157,11 +203,17 @@ export default function AlarmManagement() {
       endTs: filters.endTs,
       limit: 10000
     }
-    exportAlarmsCsv(params)
-    message.success('正在导出 CSV...')
+    try {
+      message.loading({ content: '正在导出 CSV...', key: 'export' })
+      await exportAlarmsCsv(params)
+      message.success({ content: 'CSV 导出成功', key: 'export' })
+    } catch (err) {
+      console.error(err)
+      message.error({ content: '导出失败', key: 'export' })
+    }
   }, [filters])
 
-  const handleExportXlsx = useCallback(() => {
+  const handleExportXlsx = useCallback(async () => {
     const params = {
       deviceId: filters.deviceId,
       status: filters.status,
@@ -170,8 +222,14 @@ export default function AlarmManagement() {
       endTs: filters.endTs,
       limit: 10000
     }
-    exportAlarmsXlsx(params)
-    message.success('正在导出 Excel...')
+    try {
+      message.loading({ content: '正在导出 Excel...', key: 'export' })
+      await exportAlarmsXlsx(params)
+      message.success({ content: 'Excel 导出成功', key: 'export' })
+    } catch (err) {
+      console.error(err)
+      message.error({ content: '导出失败', key: 'export' })
+    }
   }, [filters])
 
   const onSearch = useCallback(async (values: any) => {
@@ -294,6 +352,12 @@ export default function AlarmManagement() {
     }
   }, [createForm, loadFirstPage])
 
+  // 查看详情
+  const openDetailModal = useCallback((alarm: Alarm) => {
+    setDetailAlarm(alarm)
+    setDetailModalOpen(true)
+  }, [])
+
   const columns: ColumnsType<Alarm> = useMemo(() => [
     {
       title: '时间',
@@ -351,7 +415,7 @@ export default function AlarmManagement() {
     {
       title: '操作',
       key: 'actions',
-      width: 180,
+      width: 220,
       fixed: 'right',
       render: (_, record) => {
         const isClosed = record.status === 2
@@ -359,6 +423,14 @@ export default function AlarmManagement() {
 
         return (
           <Space>
+            <Button
+              size="small"
+              type="link"
+              onClick={() => openDetailModal(record)}
+            >
+              详情
+            </Button>
+
             <Button
               size="small"
               onClick={() => openAckModal(record)}
@@ -382,7 +454,19 @@ export default function AlarmManagement() {
         )
       }
     }
-  ], [doClose, openAckModal])
+  ], [doClose, openAckModal, openDetailModal])
+
+  // 计算告警统计百分比
+  const totalGroupCount = groupStats.openCount + groupStats.acknowledgedCount + groupStats.closedCount
+  const openPercent = totalGroupCount > 0 ? Math.round((groupStats.openCount / totalGroupCount) * 100) : 0
+  const ackedPercent = totalGroupCount > 0 ? Math.round((groupStats.acknowledgedCount / totalGroupCount) * 100) : 0
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await loadFirstPage()
+    setRefreshing(false)
+    message.success('数据已刷新')
+  }
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -394,75 +478,187 @@ export default function AlarmManagement() {
         </div>
         <Space>
           <Button onClick={openCreateModal}>创建测试告警</Button>
-          <Button onClick={() => void loadFirstPage()}>刷新</Button>
+          <Button
+            icon={<SyncOutlined spin={refreshing} />}
+            onClick={handleRefresh}
+            loading={refreshing}
+          >
+            刷新
+          </Button>
         </Space>
       </div>
 
+      {/* v62: 增强的统计卡片 */}
+      <Row gutter={16}>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title={<span><AlertOutlined style={{ marginRight: 8, color: '#ff4d4f' }} />未处理告警</span>}
+              value={groupStats.openCount}
+              valueStyle={{ color: '#ff4d4f', fontSize: 32 }}
+              suffix={<span style={{ fontSize: 14, color: '#999' }}>/ {totalGroupCount}</span>}
+            />
+            <Progress
+              percent={openPercent}
+              strokeColor="#ff4d4f"
+              showInfo={false}
+              size="small"
+              style={{ marginTop: 8 }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title={<span><ClockCircleOutlined style={{ marginRight: 8, color: '#faad14' }} />已确认</span>}
+              value={groupStats.acknowledgedCount}
+              valueStyle={{ color: '#faad14', fontSize: 32 }}
+              suffix={<span style={{ fontSize: 14, color: '#999' }}>/ {totalGroupCount}</span>}
+            />
+            <Progress
+              percent={ackedPercent}
+              strokeColor="#faad14"
+              showInfo={false}
+              size="small"
+              style={{ marginTop: 8 }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title={<span><CheckCircleOutlined style={{ marginRight: 8, color: '#52c41a' }} />已关闭</span>}
+              value={groupStats.closedCount}
+              valueStyle={{ color: '#52c41a', fontSize: 32 }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="告警总数"
+              value={totalCount}
+              valueStyle={{ fontSize: 32 }}
+              prefix={<FireOutlined style={{ color: '#666' }} />}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* v62: 告警趋势图 */}
+      {trendData.length > 0 && (
+        <Card title="7天告警趋势" size="small">
+          <div style={{ width: '100%', height: 200 }}>
+            <ResponsiveContainer>
+              <AreaChart data={trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="time" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <RechartsTooltip
+                  formatter={(value: any, name: any) => {
+                    const nameMap: Record<string, string> = {
+                      totalCount: '总数',
+                      openCount: '未处理',
+                      criticalCount: '严重',
+                      warningCount: '警告'
+                    }
+                    return [value, nameMap[name] || name]
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="totalCount"
+                  stackId="1"
+                  stroke="#1890ff"
+                  fill="#1890ff"
+                  fillOpacity={0.3}
+                  name="totalCount"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="criticalCount"
+                  stackId="2"
+                  stroke="#ff4d4f"
+                  fill="#ff4d4f"
+                  fillOpacity={0.6}
+                  name="criticalCount"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="warningCount"
+                  stackId="2"
+                  stroke="#faad14"
+                  fill="#faad14"
+                  fillOpacity={0.6}
+                  name="warningCount"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
+
       {/* 筛选卡片 */}
-      <Card>
-        <Row gutter={16}>
-          <Col span={6}>
-            <Statistic title="未处理告警数量" value={openCount} valueStyle={{ color: 'var(--color-danger)' }} />
-          </Col>
-          <Col span={18}>
-            <Form layout="inline" onFinish={onSearch} initialValues={{ limit: 100 }}>
-              <Form.Item label="设备" name="deviceId">
-                <Select
-                  allowClear
-                  style={{ width: 180 }}
-                  options={devices.map(d => ({ label: d.name ? `${d.deviceId} - ${d.name}` : d.deviceId, value: d.deviceId }))}
-                />
-              </Form.Item>
+      <Card title="查询条件" size="small">
+        <Form layout="inline" onFinish={onSearch} initialValues={{ limit: 100 }}>
+          <Form.Item label="设备" name="deviceId">
+            <Select
+              allowClear
+              style={{ width: 180 }}
+              placeholder="全部设备"
+              options={devices.map(d => ({ label: d.name ? `${d.deviceId} - ${d.name}` : d.deviceId, value: d.deviceId }))}
+            />
+          </Form.Item>
 
-              <Form.Item label="状态" name="status">
-                <Select
-                  allowClear
-                  style={{ width: 120 }}
-                  options={StatusOptions.map(o => ({ label: o.label, value: o.value }))}
-                />
-              </Form.Item>
+          <Form.Item label="状态" name="status">
+            <Select
+              allowClear
+              style={{ width: 120 }}
+              placeholder="全部状态"
+              options={StatusOptions.map(o => ({ label: o.label, value: o.value }))}
+            />
+          </Form.Item>
 
-              <Form.Item label="最小级别" name="minSeverity">
-                <Select
-                  allowClear
-                  style={{ width: 120 }}
-                  options={SeverityOptions.map(o => ({ label: o.label, value: o.value }))}
-                />
-              </Form.Item>
+          <Form.Item label="最小级别" name="minSeverity">
+            <Select
+              allowClear
+              style={{ width: 120 }}
+              placeholder="全部级别"
+              options={SeverityOptions.map(o => ({ label: o.label, value: o.value }))}
+            />
+          </Form.Item>
 
-              <Form.Item label="时间范围" name="timeRange">
-                <RangePicker showTime />
-              </Form.Item>
+          <Form.Item label="时间范围" name="timeRange">
+            <RangePicker showTime />
+          </Form.Item>
 
-              <Form.Item label="每页" name="limit">
-                <Select
-                  style={{ width: 100 }}
-                  options={[
-                    { label: '50', value: 50 },
-                    { label: '100', value: 100 },
-                    { label: '200', value: 200 }
-                  ]}
-                />
-              </Form.Item>
+          <Form.Item label="每页" name="limit">
+            <Select
+              style={{ width: 100 }}
+              options={[
+                { label: '50', value: 50 },
+                { label: '100', value: 100 },
+                { label: '200', value: 200 }
+              ]}
+            />
+          </Form.Item>
 
-              <Form.Item>
-                <Space>
-                  <Button type="primary" htmlType="submit">查询</Button>
-                  <Dropdown
-                    menu={{
-                      items: [
-                        { key: 'csv', label: '导出 CSV', onClick: handleExportCsv },
-                        { key: 'xlsx', label: '导出 Excel', onClick: handleExportXlsx }
-                      ]
-                    }}
-                  >
-                    <Button icon={<DownloadOutlined />}>导出</Button>
-                  </Dropdown>
-                </Space>
-              </Form.Item>
-            </Form>
-          </Col>
-        </Row>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">查询</Button>
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'csv', label: '导出 CSV', onClick: handleExportCsv },
+                    { key: 'xlsx', label: '导出 Excel', onClick: handleExportXlsx }
+                  ]
+                }}
+              >
+                <Button icon={<DownloadOutlined />}>导出</Button>
+              </Dropdown>
+            </Space>
+          </Form.Item>
+        </Form>
       </Card>
 
       <Card title={`告警列表（已加载 ${alarms.length} / ${totalCount}）`}>
@@ -537,6 +733,80 @@ export default function AlarmManagement() {
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 详情模态框 */}
+      <Modal
+        title="告警详情"
+        open={detailModalOpen}
+        onCancel={() => setDetailModalOpen(false)}
+        footer={
+          <Space>
+            {detailAlarm && detailAlarm.status === 0 && (
+              <Button onClick={() => {
+                setDetailModalOpen(false)
+                openAckModal(detailAlarm)
+              }}>
+                确认告警
+              </Button>
+            )}
+            {detailAlarm && detailAlarm.status !== 2 && (
+              <Popconfirm
+                title="确定关闭该告警？"
+                okText="关闭"
+                cancelText="取消"
+                onConfirm={async () => {
+                  if (detailAlarm) {
+                    await doClose(detailAlarm)
+                    setDetailModalOpen(false)
+                  }
+                }}
+              >
+                <Button danger>关闭告警</Button>
+              </Popconfirm>
+            )}
+            <Button onClick={() => setDetailModalOpen(false)}>取消</Button>
+          </Space>
+        }
+        width={700}
+      >
+        {detailAlarm && (
+          <Descriptions bordered column={2} size="small">
+            <Descriptions.Item label="告警ID" span={2}>
+              <code style={{ fontSize: 12 }}>{detailAlarm.alarmId}</code>
+            </Descriptions.Item>
+            <Descriptions.Item label="设备ID">{detailAlarm.deviceId}</Descriptions.Item>
+            <Descriptions.Item label="标签">{detailAlarm.tagId || '-'}</Descriptions.Item>
+            <Descriptions.Item label="触发时间">
+              {dayjs(detailAlarm.ts).format('YYYY-MM-DD HH:mm:ss')}
+            </Descriptions.Item>
+            <Descriptions.Item label="创建时间">
+              {dayjs(detailAlarm.createdUtc).format('YYYY-MM-DD HH:mm:ss')}
+            </Descriptions.Item>
+            <Descriptions.Item label="级别">{severityTag(detailAlarm.severity)}</Descriptions.Item>
+            <Descriptions.Item label="状态">{statusTag(detailAlarm.status)}</Descriptions.Item>
+            <Descriptions.Item label="告警代码">{detailAlarm.code}</Descriptions.Item>
+            <Descriptions.Item label="更新时间">
+              {dayjs(detailAlarm.updatedUtc).format('YYYY-MM-DD HH:mm:ss')}
+            </Descriptions.Item>
+            <Descriptions.Item label="消息" span={2}>
+              {detailAlarm.message}
+            </Descriptions.Item>
+            {detailAlarm.ackedBy && (
+              <>
+                <Descriptions.Item label="确认人">{detailAlarm.ackedBy}</Descriptions.Item>
+                <Descriptions.Item label="确认时间">
+                  {detailAlarm.ackedUtc ? dayjs(detailAlarm.ackedUtc).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                </Descriptions.Item>
+                {detailAlarm.ackNote && (
+                  <Descriptions.Item label="确认备注" span={2}>
+                    {detailAlarm.ackNote}
+                  </Descriptions.Item>
+                )}
+              </>
+            )}
+          </Descriptions>
+        )}
       </Modal>
     </Space>
   )

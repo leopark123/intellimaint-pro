@@ -50,6 +50,24 @@ public static class TimescaleDbServiceExtensions
         services.AddSingleton<IWorkCycleRepository, WorkCycleRepository>();
         services.AddSingleton<ICycleDeviceBaselineRepository, CycleDeviceBaselineRepository>();
 
+        // v61: 标签重要性配置仓储
+        services.AddSingleton<ITagImportanceRepository, TagImportanceRepository>();
+
+        // v62: 标签关联规则仓储
+        services.AddSingleton<ITagCorrelationRepository, TagCorrelationRepository>();
+
+        // v64: 电机故障预测仓储
+        services.AddSingleton<IMotorModelRepository, MotorModelRepository>();
+        services.AddSingleton<IMotorParameterMappingRepository, MotorParameterMappingRepository>();
+        services.AddSingleton<IOperationModeRepository, OperationModeRepository>();
+        services.AddSingleton<IBaselineProfileRepository, BaselineProfileRepository>();
+        services.AddSingleton<IMotorInstanceRepository, MotorInstanceRepository>();
+
+        // v65: Edge 配置管理仓储
+        services.AddSingleton<IEdgeConfigRepository, EdgeConfigRepository>();
+        services.AddSingleton<ITagProcessingConfigRepository, TagProcessingConfigRepository>();
+        services.AddSingleton<IEdgeStatusRepository, EdgeStatusRepository>();
+
         // 配置提供者
         services.AddSingleton<IDbConfigProvider, DbConfigProvider>();
         services.AddSingleton<IConfigRevisionProvider, ConfigRevisionProvider>();

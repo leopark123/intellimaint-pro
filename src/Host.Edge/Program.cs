@@ -1,8 +1,9 @@
 using IntelliMaint.Core.Contracts;
+using IntelliMaint.Host.Edge.Services;
 using IntelliMaint.Infrastructure.Pipeline;
 using IntelliMaint.Infrastructure.Protocols.LibPlcTag;
 using IntelliMaint.Infrastructure.Protocols.OpcUa;
-using IntelliMaint.Infrastructure.Sqlite;
+using IntelliMaint.Infrastructure.TimescaleDb;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 
@@ -29,22 +30,53 @@ try
         builder.Configuration.GetSection("ChannelCapacity"));
     builder.Services.Configure<MqttOptions>(
         builder.Configuration.GetSection(MqttOptions.SectionName));
-    builder.Services.Configure<ConfigWatcherOptions>(
-        builder.Configuration.GetSection(ConfigWatcherOptions.SectionName));
+
+    // v65: Store & Forward 配置
+    builder.Services.Configure<StoreForwardOptions>(
+        builder.Configuration.GetSection(StoreForwardOptions.SectionName));
 
     // Add infrastructure services
-    builder.Services.AddSqliteInfrastructure();
+    builder.Services.AddTimescaleDbInfrastructure();
     builder.Services.AddPipelineInfrastructure();
     
     // Add protocol collectors
     builder.Services.AddLibPlcTagCollector(builder.Configuration);
     builder.Services.AddOpcUaCollector(builder.Configuration);
-    
+
     // TODO: Add MQTT publisher when ready
     // builder.Services.AddMqttPublisher(builder.Configuration);
 
+    // Add HttpClient for API calls
+    builder.Services.AddHttpClient("ApiClient", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(10);
+    });
+
+    // v65: HttpClient for config sync
+    builder.Services.AddHttpClient("ConfigSync", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(10);
+    });
+
+    // v65: HttpClient for telemetry upload
+    builder.Services.AddHttpClient("Telemetry", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(30);
+    });
+
+    // v65: Edge 预处理与断网续传服务
+    builder.Services.AddSingleton<FileRollingStore>();
+    builder.Services.AddSingleton<ConfigSyncService>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<ConfigSyncService>());
+    builder.Services.AddSingleton<EdgeDataProcessor>();
+    builder.Services.AddSingleton<StoreAndForwardService>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<StoreAndForwardService>());
+
     // Add the main edge worker
     builder.Services.AddHostedService<EdgeWorker>();
+
+    // Add health reporter service (reports collector health to API)
+    builder.Services.AddHostedService<HealthReporterService>();
 
     var host = builder.Build();
 

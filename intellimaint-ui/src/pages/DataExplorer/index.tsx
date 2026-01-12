@@ -13,6 +13,7 @@ export default function DataExplorer() {
   const [loading, setLoading] = useState(false)
   const [tags, setTags] = useState<TagInfo[]>([])
   const [data, setData] = useState<TelemetryPoint[]>([])
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>()
 
   useEffect(() => {
     loadTags()
@@ -27,6 +28,12 @@ export default function DataExplorer() {
     } catch (error) {
       console.error(error)
     }
+  }
+
+  // 设备选择变化时，清空标签选择
+  const handleDeviceChange = (deviceId: string | undefined) => {
+    setSelectedDeviceId(deviceId)
+    form.setFieldValue('tagId', undefined)
   }
 
   const handleSearch = async () => {
@@ -47,6 +54,10 @@ export default function DataExplorer() {
       if (values.timeRange && values.timeRange.length === 2) {
         params.startTs = values.timeRange[0].valueOf()
         params.endTs = values.timeRange[1].valueOf()
+      } else if (!values.deviceId && !values.tagId) {
+        params.startTs = Date.now() - 3600000
+        params.endTs = Date.now()
+        message.info('未选择筛选条件，默认查询最近1小时数据')
       }
 
       const res = await queryTelemetry(params)
@@ -79,19 +90,30 @@ export default function DataExplorer() {
     return params
   }
 
-  const handleExportCsv = () => {
+  const handleExportCsv = useCallback(async () => {
     const params = getExportParams()
-    exportTelemetryCsv(params)
-    message.success('正在导出 CSV...')
-  }
+    try {
+      message.loading({ content: '正在导出 CSV...', key: 'export' })
+      await exportTelemetryCsv(params)
+      message.success({ content: 'CSV 导出成功', key: 'export' })
+    } catch (err) {
+      console.error('Export CSV failed:', err)
+      message.error({ content: '导出失败', key: 'export' })
+    }
+  }, [])
 
-  const handleExportXlsx = useCallback(() => {
+  const handleExportXlsx = useCallback(async () => {
     const params = getExportParams()
-    exportTelemetryXlsx(params)
-    message.success('正在导出 Excel...')
-  }, [getExportParams])
+    try {
+      message.loading({ content: '正在导出 Excel...', key: 'export' })
+      await exportTelemetryXlsx(params)
+      message.success({ content: 'Excel 导出成功', key: 'export' })
+    } catch (err) {
+      console.error('Export Excel failed:', err)
+      message.error({ content: '导出失败', key: 'export' })
+    }
+  }, [])
 
-  // v56.1: 使用 useMemo 优化 - 避免每次渲染重新创建列配置
   const columns = useMemo(() => [
     {
       title: '时间',
@@ -135,7 +157,6 @@ export default function DataExplorer() {
     }
   ], [])
 
-  // v56.1: 使用 useMemo 优化 - 只在 tags 变化时重新计算
   const deviceOptions = useMemo(() =>
     [...new Set(tags.map(t => t.deviceId))].map(d => ({
       label: d,
@@ -144,17 +165,19 @@ export default function DataExplorer() {
     [tags]
   )
 
-  const tagOptions = useMemo(() =>
-    tags.map(t => ({
-      label: `${t.tagId} (${t.deviceId})`,
+  // 根据选中的设备筛选标签
+  const tagOptions = useMemo(() => {
+    const filteredTags = selectedDeviceId
+      ? tags.filter(t => t.deviceId === selectedDeviceId)
+      : tags
+    return filteredTags.map(t => ({
+      label: selectedDeviceId ? t.tagId : `${t.tagId} (${t.deviceId})`,
       value: t.tagId
-    })),
-    [tags]
-  )
+    }))
+  }, [tags, selectedDeviceId])
 
   return (
     <div>
-      {/* 页面标题 */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 8px 0' }}>数据查询</h1>
         <p style={{ fontSize: 14, color: 'var(--color-text-muted)', margin: 0 }}>查询和导出历史遥测数据</p>
@@ -168,12 +191,13 @@ export default function DataExplorer() {
               placeholder="全部"
               allowClear
               options={deviceOptions}
+              onChange={handleDeviceChange}
             />
           </Form.Item>
           <Form.Item name="tagId" label="标签">
             <Select
               style={{ width: 200 }}
-              placeholder="全部"
+              placeholder={selectedDeviceId ? '选择标签' : '全部'}
               allowClear
               showSearch
               options={tagOptions}

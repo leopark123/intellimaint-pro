@@ -8,7 +8,7 @@ import { getDevices } from '../../api/device'
 import { getTagsByDevice } from '../../api/tag'
 
 import type { AlarmRule, CreateAlarmRuleRequest, UpdateAlarmRuleRequest } from '../../types/alarmRule'
-import { ConditionTypeOptions, SeverityOptions } from '../../types/alarmRule'
+import { ConditionTypeOptions, SeverityOptions, getThresholdLabel, needsRocWindow, getRuleTypeFromCondition } from '../../types/alarmRule'
 import type { Device } from '../../types/device'
 import type { Tag as TagEntity } from '../../types/tag'
 
@@ -25,6 +25,7 @@ export default function AlarmRules() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<AlarmRule | null>(null)
   const [modalSubmitting, setModalSubmitting] = useState(false)
+  const [currentConditionType, setCurrentConditionType] = useState<string>('gt')
 
   const [form] = Form.useForm()
 
@@ -80,8 +81,10 @@ export default function AlarmRules() {
       enabled: true,
       severity: 3,
       durationMs: 0,
-      conditionType: 'gt'
+      conditionType: 'gt',
+      rocWindowMs: 300000 // 默认 5 分钟
     })
+    setCurrentConditionType('gt')
     setTags([])
     setModalOpen(true)
   }, [form])
@@ -101,8 +104,10 @@ export default function AlarmRules() {
         durationMs: rule.durationMs,
         severity: rule.severity,
         messageTemplate: rule.messageTemplate ?? undefined,
-        enabled: rule.enabled
+        enabled: rule.enabled,
+        rocWindowMs: rule.rocWindowMs ?? 300000
       })
+      setCurrentConditionType(rule.conditionType)
       await loadTagsByDevice(rule.deviceId ?? undefined)
       setModalOpen(true)
     },
@@ -123,6 +128,11 @@ export default function AlarmRules() {
     [form, loadTagsByDevice]
   )
 
+  // v56: 条件类型变化处理
+  const onConditionTypeChange = useCallback((value: string) => {
+    setCurrentConditionType(value)
+  }, [])
+
   const onSubmit = useCallback(async () => {
     try {
       const values = await form.validateFields()
@@ -140,7 +150,9 @@ export default function AlarmRules() {
           durationMs: values.durationMs ?? 0,
           severity: values.severity ?? 3,
           messageTemplate: values.messageTemplate,
-          enabled: values.enabled ?? true
+          enabled: values.enabled ?? true,
+          // v56: 变化率规则需要窗口参数
+          rocWindowMs: needsRocWindow(values.conditionType) ? values.rocWindowMs : undefined
         }
 
         const res = await createAlarmRule(req)
@@ -160,7 +172,9 @@ export default function AlarmRules() {
           durationMs: values.durationMs ?? 0,
           severity: values.severity ?? 3,
           messageTemplate: values.messageTemplate,
-          enabled: values.enabled
+          enabled: values.enabled,
+          // v56: 变化率规则需要窗口参数
+          rocWindowMs: needsRocWindow(values.conditionType) ? values.rocWindowMs : undefined
         }
 
         const res = await updateAlarmRule(editing.ruleId, req)
@@ -231,42 +245,92 @@ export default function AlarmRules() {
     [tags]
   )
 
+  // v56: 条件类型显示名称映射
+  const conditionTypeLabels: Record<string, string> = {
+    gt: '大于',
+    gte: '大于等于',
+    lt: '小于',
+    lte: '小于等于',
+    eq: '等于',
+    ne: '不等于',
+    offline: '离线检测',
+    roc_percent: '变化率%',
+    roc_absolute: '变化率',
+    volatility: '波动告警'
+  }
+
+  // v56: 规则类型颜色
+  const ruleTypeColors: Record<string, string> = {
+    threshold: 'blue',
+    offline: 'orange',
+    roc: 'purple',
+    volatility: 'green'
+  }
+
   const columns: ColumnsType<AlarmRule> = useMemo(
     () => [
-      { title: '规则ID', dataIndex: 'ruleId', width: 220 },
-      { title: '名称', dataIndex: 'name', width: 200 },
-      { title: '设备', dataIndex: 'deviceId', width: 160, render: (v: string | null | undefined) => v || '-' },
-      { title: '标签', dataIndex: 'tagId', width: 220 },
-      { title: '条件', dataIndex: 'conditionType', width: 110 },
-      { title: '阈值', dataIndex: 'threshold', width: 110 },
+      { title: '规则ID', dataIndex: 'ruleId', width: 180 },
+      { title: '名称', dataIndex: 'name', width: 160 },
+      { title: '设备', dataIndex: 'deviceId', width: 140, render: (v: string | null | undefined) => v || '-' },
+      { title: '标签', dataIndex: 'tagId', width: 180 },
       {
-        title: '持续时间',
-        dataIndex: 'durationMs',
+        title: '规则类型',
+        dataIndex: 'conditionType',
+        width: 100,
+        render: (v: string) => {
+          const ruleType = getRuleTypeFromCondition(v)
+          const color = ruleTypeColors[ruleType] || 'default'
+          const labels: Record<string, string> = { threshold: '阈值', offline: '离线', roc: '变化率', volatility: '波动' }
+          return <Tag color={color}>{labels[ruleType] || ruleType}</Tag>
+        }
+      },
+      {
+        title: '条件',
+        dataIndex: 'conditionType',
+        width: 100,
+        render: (v: string) => conditionTypeLabels[v] || v
+      },
+      {
+        title: '阈值',
+        key: 'thresholdDisplay',
         width: 120,
-        render: (v: number) => (v && v > 0 ? `${v} ms` : '立即')
+        render: (_: unknown, r: AlarmRule) => {
+          if (r.conditionType === 'offline') return `${r.threshold} 秒`
+          if (r.conditionType === 'roc_percent') return `${r.threshold}%`
+          return r.threshold
+        }
+      },
+      {
+        title: '时间窗口',
+        dataIndex: 'rocWindowMs',
+        width: 100,
+        render: (v: number | undefined, r: AlarmRule) => {
+          if (!needsRocWindow(r.conditionType)) return '-'
+          if (!v) return '-'
+          if (v >= 3600000) return `${v / 3600000}h`
+          if (v >= 60000) return `${v / 60000}m`
+          return `${v / 1000}s`
+        }
       },
       {
         title: '级别',
         dataIndex: 'severity',
-        width: 110,
-        render: (v: number) => <Tag>{v}</Tag>
+        width: 80,
+        render: (v: number) => {
+          const colors = ['', 'cyan', 'gold', 'orange', 'red', 'magenta']
+          return <Tag color={colors[v] || 'default'}>{v}</Tag>
+        }
       },
       {
         title: '状态',
         dataIndex: 'enabled',
-        width: 100,
+        width: 80,
         render: (v: boolean, r) => <Switch checked={v} onChange={(checked) => onToggleEnabled(r, checked)} />
-      },
-      {
-        title: '更新时间',
-        dataIndex: 'updatedUtc',
-        width: 180,
-        render: (v: number) => formatTime(v)
       },
       {
         title: '操作',
         key: 'actions',
-        width: 160,
+        width: 140,
         render: (_: unknown, r) => (
           <Space>
             <Button size="small" onClick={() => openEdit(r)}>
@@ -360,24 +424,62 @@ export default function AlarmRules() {
           </Form.Item>
 
           <Form.Item
-            label="条件"
+            label="条件类型"
             name="conditionType"
-            rules={[{ required: true, message: '请选择条件' }]}
+            rules={[{ required: true, message: '请选择条件类型' }]}
           >
-            <Select options={ConditionTypeOptions} />
+            <Select options={ConditionTypeOptions} onChange={onConditionTypeChange} />
           </Form.Item>
 
           <Form.Item
-            label="阈值"
+            label={getThresholdLabel(currentConditionType)}
             name="threshold"
             rules={[{ required: true, message: '请输入阈值' }]}
+            extra={
+              currentConditionType === 'offline'
+                ? '设备/标签超过该时间无数据将触发告警'
+                : currentConditionType === 'roc_percent'
+                ? '在时间窗口内变化百分比超过该值触发告警'
+                : currentConditionType === 'roc_absolute'
+                ? '在时间窗口内变化绝对值超过该值触发告警'
+                : currentConditionType === 'volatility'
+                ? '在时间窗口内数据标准差超过该值触发告警'
+                : undefined
+            }
           >
-            <InputNumber style={{ width: '100%' }} />
+            <InputNumber style={{ width: '100%' }} min={0} />
           </Form.Item>
 
-          <Form.Item label="持续时间 (ms)" name="durationMs">
-            <InputNumber min={0} style={{ width: '100%' }} placeholder="0 表示立即触发" />
-          </Form.Item>
+          {/* v56: 时间窗口 - 变化率和波动规则显示 */}
+          {needsRocWindow(currentConditionType) && (
+            <Form.Item
+              label="时间窗口"
+              name="rocWindowMs"
+              rules={[{ required: true, message: '请输入时间窗口' }]}
+              extra={currentConditionType === 'volatility'
+                ? '计算标准差的时间窗口，最大 3600000ms (1小时)'
+                : '计算变化率的时间窗口，最大 3600000ms (1小时)'}
+            >
+              <Select
+                options={[
+                  { label: '10 秒', value: 10000 },
+                  { label: '30 秒', value: 30000 },
+                  { label: '1 分钟', value: 60000 },
+                  { label: '5 分钟', value: 300000 },
+                  { label: '10 分钟', value: 600000 },
+                  { label: '30 分钟', value: 1800000 },
+                  { label: '1 小时', value: 3600000 }
+                ]}
+              />
+            </Form.Item>
+          )}
+
+          {/* 持续时间 - 离线检测和波动告警不需要 */}
+          {currentConditionType !== 'offline' && currentConditionType !== 'volatility' && (
+            <Form.Item label="持续时间 (ms)" name="durationMs">
+              <InputNumber min={0} style={{ width: '100%' }} placeholder="0 表示立即触发" />
+            </Form.Item>
+          )}
 
           <Form.Item label="严重级别" name="severity">
             <Select options={SeverityOptions} />

@@ -26,7 +26,7 @@ public sealed class UserRepository : IUserRepository
     public async Task<UserDto?> GetByUsernameAsync(string username, CancellationToken ct)
     {
         const string sql = @"
-            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc
+            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc, must_change_password
             FROM ""user"" WHERE LOWER(username) = LOWER(@Username)";
 
         using var conn = _factory.CreateConnection();
@@ -38,7 +38,7 @@ public sealed class UserRepository : IUserRepository
     public async Task<UserDto?> GetByIdAsync(string userId, CancellationToken ct)
     {
         const string sql = @"
-            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc
+            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc, must_change_password
             FROM ""user"" WHERE user_id = @UserId";
 
         using var conn = _factory.CreateConnection();
@@ -51,7 +51,7 @@ public sealed class UserRepository : IUserRepository
     {
         const string sql = @"
             SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc,
-                   password_hash, failed_login_count, lockout_until_utc
+                   password_hash, failed_login_count, lockout_until_utc, must_change_password
             FROM ""user"" WHERE LOWER(username) = LOWER(@Username) AND enabled = true";
 
         using var conn = _factory.CreateConnection();
@@ -100,7 +100,8 @@ public sealed class UserRepository : IUserRepository
             Role = row.role,
             Enabled = row.enabled,
             CreatedUtc = row.created_utc,
-            LastLoginUtc = row.last_login_utc
+            LastLoginUtc = row.last_login_utc,
+            MustChangePassword = row.must_change_password
         };
     }
 
@@ -108,11 +109,11 @@ public sealed class UserRepository : IUserRepository
     {
         var userId = Guid.NewGuid().ToString("N")[..16];
         var passwordHash = HashPassword(password);
-        var createdUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var nowUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         const string sql = @"
-            INSERT INTO ""user"" (user_id, username, password_hash, display_name, role, enabled, created_utc)
-            VALUES (@UserId, @Username, @PasswordHash, @DisplayName, @Role, true, @CreatedUtc)";
+            INSERT INTO ""user"" (user_id, username, password_hash, display_name, role, enabled, created_utc, updated_utc)
+            VALUES (@UserId, @Username, @PasswordHash, @DisplayName, @Role, true, @CreatedUtc, @UpdatedUtc)";
 
         using var conn = _factory.CreateConnection();
         await conn.ExecuteAsync(new CommandDefinition(sql, new
@@ -122,7 +123,8 @@ public sealed class UserRepository : IUserRepository
             PasswordHash = passwordHash,
             DisplayName = displayName,
             Role = role,
-            CreatedUtc = createdUtc
+            CreatedUtc = nowUtc,
+            UpdatedUtc = nowUtc
         }, cancellationToken: ct));
 
         _logger.LogInformation("Created user {UserId} with username {Username}", userId, username);
@@ -134,7 +136,7 @@ public sealed class UserRepository : IUserRepository
             DisplayName = displayName,
             Role = role,
             Enabled = true,
-            CreatedUtc = createdUtc
+            CreatedUtc = nowUtc
         };
     }
 
@@ -196,7 +198,8 @@ public sealed class UserRepository : IUserRepository
             return false;
 
         var newHash = HashPassword(newPassword);
-        const string updateSql = @"UPDATE ""user"" SET password_hash = @PasswordHash WHERE user_id = @UserId";
+        // Clear must_change_password flag when user changes their own password
+        const string updateSql = @"UPDATE ""user"" SET password_hash = @PasswordHash, must_change_password = false WHERE user_id = @UserId";
         var affected = await conn.ExecuteAsync(
             new CommandDefinition(updateSql, new { PasswordHash = newHash, UserId = userId }, cancellationToken: ct));
 
@@ -206,7 +209,8 @@ public sealed class UserRepository : IUserRepository
     public async Task<bool> ResetPasswordAsync(string userId, string newPassword, CancellationToken ct)
     {
         var newHash = HashPassword(newPassword);
-        const string sql = @"UPDATE ""user"" SET password_hash = @PasswordHash WHERE user_id = @UserId";
+        // Set must_change_password flag when admin resets password
+        const string sql = @"UPDATE ""user"" SET password_hash = @PasswordHash, must_change_password = true WHERE user_id = @UserId";
 
         using var conn = _factory.CreateConnection();
         var affected = await conn.ExecuteAsync(
@@ -241,7 +245,7 @@ public sealed class UserRepository : IUserRepository
     public async Task<IReadOnlyList<UserDto>> ListAsync(CancellationToken ct)
     {
         const string sql = @"
-            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc
+            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc, must_change_password
             FROM ""user"" ORDER BY created_utc DESC";
 
         using var conn = _factory.CreateConnection();
@@ -270,7 +274,7 @@ public sealed class UserRepository : IUserRepository
 
         const string sql = @"
             SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc,
-                   refresh_token_expires_utc
+                   refresh_token_expires_utc, must_change_password
             FROM ""user""
             WHERE refresh_token = @RefreshToken AND enabled = true";
 
@@ -293,7 +297,8 @@ public sealed class UserRepository : IUserRepository
             Role = row.role,
             Enabled = row.enabled,
             CreatedUtc = row.created_utc,
-            LastLoginUtc = row.last_login_utc
+            LastLoginUtc = row.last_login_utc,
+            MustChangePassword = row.must_change_password
         };
     }
 
@@ -412,7 +417,8 @@ public sealed class UserRepository : IUserRepository
         Role = row.role,
         Enabled = row.enabled,
         CreatedUtc = row.created_utc,
-        LastLoginUtc = row.last_login_utc
+        LastLoginUtc = row.last_login_utc,
+        MustChangePassword = row.must_change_password
     };
 
     private sealed class UserRow
@@ -424,6 +430,7 @@ public sealed class UserRepository : IUserRepository
         public bool enabled { get; set; }
         public long created_utc { get; set; }
         public long? last_login_utc { get; set; }
+        public bool must_change_password { get; set; }
     }
 
     private sealed class UserRowWithPassword
@@ -438,6 +445,7 @@ public sealed class UserRepository : IUserRepository
         public string password_hash { get; set; } = "";
         public int failed_login_count { get; set; }
         public long? lockout_until_utc { get; set; }
+        public bool must_change_password { get; set; }
     }
 
     private sealed class UserRowWithExpiry
@@ -450,5 +458,6 @@ public sealed class UserRepository : IUserRepository
         public long created_utc { get; set; }
         public long? last_login_utc { get; set; }
         public long? refresh_token_expires_utc { get; set; }
+        public bool must_change_password { get; set; }
     }
 }

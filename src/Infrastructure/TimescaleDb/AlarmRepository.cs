@@ -158,6 +158,28 @@ public sealed class AlarmRepository : IAlarmRepository
         return row is null ? null : MapToRecord(row);
     }
 
+    /// <summary>批量获取告警（优化N+1查询）</summary>
+    public async Task<IReadOnlyList<AlarmRecord>> GetByIdsAsync(IEnumerable<string> alarmIds, CancellationToken ct)
+    {
+        var idList = alarmIds.ToList();
+        if (idList.Count == 0)
+            return Array.Empty<AlarmRecord>();
+
+        const string sql = @"
+            SELECT a.alarm_id, a.device_id, a.tag_id, a.ts, a.severity, a.code, a.message,
+                   a.status, a.created_utc, a.updated_utc,
+                   k.acked_by, k.acked_utc, k.ack_note
+            FROM alarm a
+            LEFT JOIN alarm_ack k ON a.alarm_id = k.alarm_id
+            WHERE a.alarm_id = ANY(@AlarmIds)
+            ORDER BY a.ts DESC";
+
+        using var conn = _factory.CreateConnection();
+        var rows = await conn.QueryAsync<AlarmRow>(
+            new CommandDefinition(sql, new { AlarmIds = idList.ToArray() }, cancellationToken: ct));
+        return rows.Select(MapToRecord).ToList();
+    }
+
     public async Task<PagedResult<AlarmRecord>> QueryAsync(AlarmQuery query, CancellationToken ct)
     {
         var conditions = new List<string>();
@@ -268,6 +290,35 @@ public sealed class AlarmRepository : IAlarmRepository
         return (int)Math.Min(count, int.MaxValue);
     }
 
+    /// <summary>批量获取设备的未关闭告警数量（优化N+1查询）</summary>
+    public async Task<IReadOnlyDictionary<string, int>> GetOpenCountByDevicesAsync(IEnumerable<string> deviceIds, CancellationToken ct)
+    {
+        var idList = deviceIds.ToList();
+        if (idList.Count == 0)
+            return new Dictionary<string, int>();
+
+        const string sql = @"
+            SELECT device_id, COUNT(*) as cnt
+            FROM alarm
+            WHERE status = 0 AND device_id = ANY(@DeviceIds)
+            GROUP BY device_id";
+
+        using var conn = _factory.CreateConnection();
+        var rows = await conn.QueryAsync<(string device_id, long cnt)>(
+            new CommandDefinition(sql, new { DeviceIds = idList.ToArray() }, cancellationToken: ct));
+
+        var result = rows.ToDictionary(r => r.device_id, r => (int)Math.Min(r.cnt, int.MaxValue));
+
+        // 确保所有请求的 deviceId 都有返回值（没有告警的设备返回 0）
+        foreach (var deviceId in idList)
+        {
+            if (!result.ContainsKey(deviceId))
+                result[deviceId] = 0;
+        }
+
+        return result;
+    }
+
     public async Task<int> DeleteBeforeAsync(long cutoffTs, CancellationToken ct)
     {
         using var conn = _factory.CreateConnection();
@@ -284,6 +335,133 @@ public sealed class AlarmRepository : IAlarmRepository
 
         _logger.LogInformation("Deleted {Count} alarms before {CutoffTs}", affected, cutoffTs);
         return affected;
+    }
+
+    public async Task<bool> HasUnclosedByCodeAsync(string code, CancellationToken ct)
+    {
+        const string sql = @"SELECT COUNT(*) FROM alarm WHERE code = @Code AND status <> 2";
+
+        using var conn = _factory.CreateConnection();
+        var count = await conn.ExecuteScalarAsync<long>(
+            new CommandDefinition(sql, new { Code = code }, cancellationToken: ct));
+        return count > 0;
+    }
+
+    public async Task<IReadOnlyList<AlarmTrendBucket>> GetTrendAsync(AlarmTrendQuery query, CancellationToken ct)
+    {
+        var parameters = new DynamicParameters();
+        var bucketSize = query.BucketSizeMs > 0 ? query.BucketSizeMs : 3600000;
+        var limit = query.Limit > 0 ? Math.Min(query.Limit ?? 168, 500) : 168;
+
+        parameters.Add("DeviceId", query.DeviceId);
+        parameters.Add("StartTs", query.StartTs);
+        parameters.Add("EndTs", query.EndTs);
+        parameters.Add("BucketSize", bucketSize);
+        parameters.Add("Limit", limit);
+
+        // Use database function that leverages Continuous Aggregates for common bucket sizes
+        // Falls back to time_bucket for custom intervals
+        const string sql = @"
+            SELECT bucket, device_id, total_count, open_count, critical_count, warning_count
+            FROM get_alarm_trend_fast(@DeviceId, @StartTs, @EndTs, @BucketSize)
+            LIMIT @Limit";
+
+        using var conn = _factory.CreateConnection();
+
+        try
+        {
+            var rows = await conn.QueryAsync<TrendRow>(
+                new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+            return rows.Select(r => new AlarmTrendBucket
+            {
+                Bucket = r.bucket,
+                DeviceId = r.device_id,
+                TotalCount = r.total_count,
+                OpenCount = r.open_count,
+                CriticalCount = r.critical_count,
+                WarningCount = r.warning_count
+            }).ToList();
+        }
+        catch (Npgsql.PostgresException ex) when (ex.SqlState == "42883") // function does not exist
+        {
+            // Fallback to direct query with time_bucket if function not available
+            _logger.LogWarning("get_alarm_trend_fast function not found, using fallback query");
+            return await GetTrendFallbackAsync(query, ct);
+        }
+    }
+
+    /// <summary>
+    /// Fallback trend query using time_bucket directly (for when CAGG function is not available)
+    /// </summary>
+    private async Task<IReadOnlyList<AlarmTrendBucket>> GetTrendFallbackAsync(AlarmTrendQuery query, CancellationToken ct)
+    {
+        var conditions = new List<string>();
+        var parameters = new DynamicParameters();
+
+        if (!string.IsNullOrWhiteSpace(query.DeviceId))
+        {
+            conditions.Add("device_id = @DeviceId");
+            parameters.Add("DeviceId", query.DeviceId);
+        }
+
+        if (query.StartTs.HasValue)
+        {
+            conditions.Add("ts >= @StartTs");
+            parameters.Add("StartTs", query.StartTs.Value);
+        }
+
+        if (query.EndTs.HasValue)
+        {
+            conditions.Add("ts <= @EndTs");
+            parameters.Add("EndTs", query.EndTs.Value);
+        }
+
+        var whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
+        var bucketSize = query.BucketSizeMs > 0 ? query.BucketSizeMs : 3600000;
+        var limit = query.Limit > 0 ? Math.Min(query.Limit ?? 168, 500) : 168;
+
+        parameters.Add("BucketSize", bucketSize);
+        parameters.Add("Limit", limit);
+
+        // Use time_bucket function for better TimescaleDB optimization
+        var sql = $@"
+            SELECT
+                time_bucket(@BucketSize::bigint, ts) AS bucket,
+                device_id,
+                COUNT(*)::int AS total_count,
+                SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END)::int AS open_count,
+                SUM(CASE WHEN severity >= 4 THEN 1 ELSE 0 END)::int AS critical_count,
+                SUM(CASE WHEN severity IN (2, 3) THEN 1 ELSE 0 END)::int AS warning_count
+            FROM alarm
+            {whereClause}
+            GROUP BY time_bucket(@BucketSize::bigint, ts), device_id
+            ORDER BY bucket DESC
+            LIMIT @Limit";
+
+        using var conn = _factory.CreateConnection();
+        var rows = await conn.QueryAsync<TrendRow>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+        return rows.Select(r => new AlarmTrendBucket
+        {
+            Bucket = r.bucket,
+            DeviceId = r.device_id,
+            TotalCount = r.total_count,
+            OpenCount = r.open_count,
+            CriticalCount = r.critical_count,
+            WarningCount = r.warning_count
+        }).ToList();
+    }
+
+    private sealed class TrendRow
+    {
+        public long bucket { get; set; }
+        public string? device_id { get; set; }
+        public int total_count { get; set; }
+        public int open_count { get; set; }
+        public int critical_count { get; set; }
+        public int warning_count { get; set; }
     }
 
     private static AlarmRecord MapToRecord(AlarmRow row)

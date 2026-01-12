@@ -52,32 +52,52 @@ apiClient.interceptors.response.use(
     // v48: 增强错误处理
     if (error.response) {
       const status = error.response.status
-      
+      const data = error.response.data
+
       if (status === 401) {
         // Token 过期或无效，清除认证状态并跳转登录页
         clearAuth()
         window.location.href = '/login'
       }
-      
+
       // 429 Too Many Requests - 账号锁定或限流
       if (status === 429) {
-        const data = error.response.data
         console.warn('Rate limited or account locked:', data?.error)
       }
+
+      // v56.1: 提取 API 返回的错误信息，覆盖 axios 默认的 "Request failed with status code XXX"
+      if (data?.error) {
+        error.message = data.error
+      }
     }
-    
+
     // 网络错误
     if (error.code === 'ECONNABORTED') {
       console.error('Request timeout')
     }
-    
+
     if (error.message === 'Network Error') {
       console.error('Network error - server may be unavailable')
     }
-    
+
     return Promise.reject(error)
   }
 )
 
-export default apiClient
-export { apiClient }
+// v62: 添加 Blob 下载方法用于文件导出
+async function getBlob(url: string): Promise<Blob> {
+  const token = getToken()
+  const response = await axios.get(`/api${url}`, {
+    responseType: 'blob',
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  })
+  return response.data
+}
+
+// 扩展 apiClient 对象
+const extendedApiClient = Object.assign(apiClient, {
+  getBlob
+})
+
+export default extendedApiClient
+export { apiClient, getBlob }

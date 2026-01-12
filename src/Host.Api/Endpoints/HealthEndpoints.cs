@@ -1,6 +1,7 @@
 using IntelliMaint.Core.Abstractions;
 using IntelliMaint.Core.Contracts;
 using IntelliMaint.Host.Api.Models;
+using IntelliMaint.Host.Api.Services;
 using IntelliMaint.Infrastructure.Sqlite;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
@@ -29,7 +30,22 @@ public static class HealthEndpoints
 
         group.MapPost("/snapshot", SaveSnapshotAsync)
             .WithName("SaveHealthSnapshot")
-            .WithSummary("保存健康快照（内部调用）");
+            .WithSummary("保存健康快照（内部调用）")
+            .AllowAnonymous();  // Edge 服务内部调用，无需认证
+
+        // v56.2: 数据库健康检查端点
+        group.MapGet("/database", GetDatabaseHealthAsync)
+            .WithName("GetDatabaseHealth")
+            .WithSummary("获取数据库健康状态");
+
+        group.MapGet("/database/statistics", GetDatabaseStatisticsAsync)
+            .WithName("GetDatabaseStatistics")
+            .WithSummary("获取数据库统计信息");
+
+        group.MapPost("/database/maintenance", PerformDatabaseMaintenanceAsync)
+            .WithName("PerformDatabaseMaintenance")
+            .WithSummary("执行数据库维护")
+            .RequireAuthorization(AuthPolicies.AdminOnly);
     }
 
     private static async Task<IResult> GetCurrentHealthAsync(
@@ -123,65 +139,38 @@ public static class HealthEndpoints
         }
     }
 
-    private static async Task<IResult> GetStatsAsync(
-        [FromServices] IDbExecutor db,
-        [FromServices] IAlarmRepository alarmRepo,
-        [FromServices] ITelemetryRepository telemetryRepo,
+    private static Task<IResult> GetStatsAsync(
+        [FromServices] StatsCacheService statsCache,
         CancellationToken ct)
     {
         try
         {
-            // device / tag 统计：直接 SQL COUNT，避免拉全表
-            const string totalDevicesSql = "SELECT COUNT(*) FROM device;";
-            const string enabledDevicesSql = "SELECT COUNT(*) FROM device WHERE enabled = 1;";
-            const string totalTagsSql = "SELECT COUNT(*) FROM tag;";
-            const string enabledTagsSql = "SELECT COUNT(*) FROM tag WHERE enabled = 1;";
-            const string totalAlarmsSql = "SELECT COUNT(*) FROM alarm;";
-
-            var totalDevices = await db.ExecuteScalarAsync<long>(totalDevicesSql, null, ct);
-            var enabledDevices = await db.ExecuteScalarAsync<long>(enabledDevicesSql, null, ct);
-            var totalTags = await db.ExecuteScalarAsync<long>(totalTagsSql, null, ct);
-            var enabledTags = await db.ExecuteScalarAsync<long>(enabledTagsSql, null, ct);
-            var totalAlarms = await db.ExecuteScalarAsync<long>(totalAlarmsSql, null, ct);
-
-            var openAlarms = await alarmRepo.GetOpenCountAsync(null, ct);
-
-            // telemetry 统计：复用仓储的 stats + 额外的 last24h count
-            var telemetryStats = await telemetryRepo.GetStatsAsync(null, ct);
-            var totalTelemetryPoints = telemetryStats.TotalCount;
-
-            var since24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeMilliseconds();
-            const string last24hSql = "SELECT COUNT(*) FROM telemetry WHERE ts >= @SinceTs;";
-            var last24HoursTelemetryPoints = await db.ExecuteScalarAsync<long>(last24hSql, new { SinceTs = since24h }, ct);
-
-            // 数据库大小：PRAGMA page_count * page_size
-            var pageCount = await db.ExecuteScalarAsync<long>("PRAGMA page_count;", null, ct);
-            var pageSize = await db.ExecuteScalarAsync<long>("PRAGMA page_size;", null, ct);
-            var databaseSizeBytes = checked(pageCount * pageSize);
+            // v56.1: 使用缓存的统计数据，避免每次请求都执行 COUNT(*) 全表扫描
+            var cached = statsCache.GetStats();
 
             var stats = new SystemStats
             {
-                TotalDevices = totalDevices,
-                EnabledDevices = enabledDevices,
-                TotalTags = totalTags,
-                EnabledTags = enabledTags,
-                TotalAlarms = totalAlarms,
-                OpenAlarms = openAlarms,
-                TotalTelemetryPoints = totalTelemetryPoints,
-                Last24HoursTelemetryPoints = last24HoursTelemetryPoints,
-                DatabaseSizeBytes = databaseSizeBytes
+                TotalDevices = cached.TotalDevices,
+                EnabledDevices = cached.EnabledDevices,
+                TotalTags = cached.TotalTags,
+                EnabledTags = cached.EnabledTags,
+                TotalAlarms = cached.TotalAlarms,
+                OpenAlarms = cached.OpenAlarms,
+                TotalTelemetryPoints = cached.TotalTelemetryPoints,
+                Last24HoursTelemetryPoints = cached.Last24HoursTelemetryPoints,
+                DatabaseSizeBytes = cached.DatabaseSizeBytes
             };
 
-            return Results.Ok(new ApiResponse<SystemStats>
+            return Task.FromResult(Results.Ok(new ApiResponse<SystemStats>
             {
                 Success = true,
                 Data = stats
-            });
+            }));
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to get system stats.");
-            return Results.Problem("Failed to get system stats.");
+            return Task.FromResult(Results.Problem("Failed to get system stats."));
         }
     }
 
@@ -196,5 +185,83 @@ public static class HealthEndpoints
         public long TotalTelemetryPoints { get; init; }
         public long Last24HoursTelemetryPoints { get; init; }
         public long DatabaseSizeBytes { get; init; }
+    }
+
+    // v56.2: 数据库健康检查端点实现
+
+    private static async Task<IResult> GetDatabaseHealthAsync(
+        [FromServices] ITimeSeriesDb timeSeriesDb,
+        CancellationToken ct)
+    {
+        try
+        {
+            var health = await timeSeriesDb.GetHealthAsync(ct);
+            return Results.Ok(new ApiResponse<DbHealthStatus>
+            {
+                Success = true,
+                Data = health
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to get database health.");
+            return Results.Problem("Failed to get database health.");
+        }
+    }
+
+    private static async Task<IResult> GetDatabaseStatisticsAsync(
+        [FromServices] ITimeSeriesDb timeSeriesDb,
+        CancellationToken ct)
+    {
+        try
+        {
+            var stats = await timeSeriesDb.GetStatisticsAsync(ct);
+            return Results.Ok(new ApiResponse<DbStatistics>
+            {
+                Success = true,
+                Data = stats
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to get database statistics.");
+            return Results.Problem("Failed to get database statistics.");
+        }
+    }
+
+    private static async Task<IResult> PerformDatabaseMaintenanceAsync(
+        [FromServices] ITimeSeriesDb timeSeriesDb,
+        [FromBody] MaintenanceOptions? options,
+        CancellationToken ct)
+    {
+        try
+        {
+            var opts = options ?? new MaintenanceOptions();
+            Log.Information("Starting database maintenance with options: {@Options}", opts);
+
+            var result = await timeSeriesDb.PerformMaintenanceAsync(opts, ct);
+
+            if (result.Success)
+            {
+                Log.Information(
+                    "Database maintenance completed. Duration: {DurationMs}ms, Rows deleted: {RowsDeleted}, Space reclaimed: {SpaceReclaimed}MB",
+                    result.DurationMs, result.RowsDeleted, result.SpaceReclaimedBytes / 1024.0 / 1024.0);
+            }
+            else
+            {
+                Log.Warning("Database maintenance completed with errors: {Error}", result.Error);
+            }
+
+            return Results.Ok(new ApiResponse<MaintenanceResult>
+            {
+                Success = result.Success,
+                Data = result
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Database maintenance failed.");
+            return Results.Problem("Database maintenance failed: " + ex.Message);
+        }
     }
 }

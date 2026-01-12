@@ -47,11 +47,20 @@ public sealed class DbConfigProvider : IDbConfigProvider
             return Array.Empty<DeviceWithTags>();
         }
 
+        // P2: 使用批量查询避免 N+1 问题
+        var deviceIds = selected.Select(d => d.DeviceId).ToList();
+        var tagsByDevice = await _tagRepo.ListByDevicesAsync(deviceIds, ct);
+
         var result = new List<DeviceWithTags>(capacity: selected.Count);
 
         foreach (var device in selected)
         {
-            var allTags = await _tagRepo.ListByDeviceAsync(device.DeviceId, ct);
+            if (!tagsByDevice.TryGetValue(device.DeviceId, out var allTags))
+            {
+                _logger.LogDebug("Device {DeviceId} has no tags, skip", device.DeviceId);
+                continue;
+            }
+
             var enabledTags = allTags.Where(t => t.Enabled).ToList();
 
             if (enabledTags.Count == 0)
@@ -67,7 +76,7 @@ public sealed class DbConfigProvider : IDbConfigProvider
             });
         }
 
-        _logger.LogDebug("Loaded config: {DeviceCount} devices for {Protocol}", result.Count, protocol);
+        _logger.LogDebug("Loaded config: {DeviceCount} devices for {Protocol} (batch query)", result.Count, protocol);
         return result;
     }
 

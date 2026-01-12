@@ -1,4 +1,4 @@
-using Dapper;
+﻿using Dapper;
 using IntelliMaint.Core.Abstractions;
 using IntelliMaint.Core.Contracts;
 using Microsoft.Extensions.Logging;
@@ -139,6 +139,14 @@ public sealed class AuditLogRepository : IAuditLogRepository
         using var conn = _factory.CreateConnection();
         var rows = await conn.QueryAsync<string>(new CommandDefinition(sql, cancellationToken: ct));
         return rows.ToList();
+    }
+
+    public async Task<int> DeleteBeforeAsync(long cutoffTs, CancellationToken ct)
+    {
+        const string sql = "DELETE FROM audit_log WHERE ts < @CutoffTs";
+
+        using var conn = _factory.CreateConnection();
+        return await conn.ExecuteAsync(new CommandDefinition(sql, new { CutoffTs = cutoffTs }, cancellationToken: ct));
     }
 
     private sealed class AuditLogRowWithTotal

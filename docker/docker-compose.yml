@@ -1,0 +1,81 @@
+services:
+  # TimescaleDB Database
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: intellimaint-timescaledb
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: intellimaint
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-IntelliMaint2024!}
+      POSTGRES_DB: intellimaint
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intellimaint"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=128MB
+      -c work_mem=16MB
+      -c max_connections=100
+      -c wal_buffers=8MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+    networks:
+      - intellimaint-network
+
+  # API Service
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: intellimaint-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DatabaseProvider=TimescaleDb
+      - ConnectionStrings__TimescaleDb=Host=timescaledb;Port=5432;Database=intellimaint;Username=intellimaint;Password=${POSTGRES_PASSWORD:-IntelliMaint2024!}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-IntelliMaint-Pro-Secret-Key-2024-Must-Be-At-Least-32-Chars}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    networks:
+      - intellimaint-network
+
+  # UI Service
+  ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ui
+    container_name: intellimaint-ui
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - intellimaint-network
+
+networks:
+  intellimaint-network:
+    driver: bridge
+
+volumes:
+  timescaledb_data:
+    driver: local

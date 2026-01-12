@@ -60,3 +60,58 @@ export const StatusOptions = [
   { label: '已确认', value: 1, color: 'warning' },
   { label: '已关闭', value: 2, color: 'default' }
 ]
+
+// v59: 告警聚合组
+export interface AlarmGroup {
+  groupId: string
+  deviceId: string
+  tagId?: string | null
+  ruleId: string
+  severity: number
+  code?: string | null
+  message?: string | null
+  alarmCount: number
+  firstOccurredUtc: number
+  lastOccurredUtc: number
+  aggregateStatus: number // 0=Open, 1=Acknowledged, 2=Closed
+  createdUtc: number
+  updatedUtc: number
+}
+
+export interface PagedAlarmGroupResult {
+  items: AlarmGroup[]
+  nextToken?: string | null
+  hasMore: boolean
+  totalCount: number
+}
+
+export interface AlarmGroupQuery {
+  deviceId?: string
+  status?: number
+  minSeverity?: number
+  startTs?: number
+  endTs?: number
+  limit?: number
+  after?: string
+}
+
+export interface AlarmGroupDetail {
+  group: AlarmGroup
+  children: Alarm[]  // 后端字段名是 children
+}
+
+export interface AlarmGroupStats {
+  openCount: number
+  acknowledgedCount: number
+  closedCount: number
+}
+
+// v62: 告警趋势数据
+export interface AlarmTrendPoint {
+  bucket: number       // 时间戳
+  deviceId: string
+  totalCount: number
+  openCount: number
+  criticalCount: number
+  warningCount: number
+}

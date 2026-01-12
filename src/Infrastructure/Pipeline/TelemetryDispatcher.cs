@@ -9,6 +9,12 @@ namespace IntelliMaint.Infrastructure.Pipeline;
 /// <summary>
 /// 遥测分发器
 /// 从源 Channel 读取，分发到多个目标 Channel
+///
+/// 架构说明（v56.2）:
+/// - 当前采用双重缓冲架构：TelemetryPipeline(Buffer1) → Dispatcher → TargetChannels(Buffer2)
+/// - 优点：解耦采集与消费，各消费者独立背压，故障隔离
+/// - 缺点：额外内存开销，约2x数据缓冲
+/// - 未来优化方向：若内存成为瓶颈，可考虑直连模式或共享内存池
 /// </summary>
 public sealed class TelemetryDispatcher : BackgroundService, ITelemetryDispatcher
 {
@@ -108,29 +114,48 @@ public sealed class TelemetryDispatcher : BackgroundService, ITelemetryDispatche
     }
     
     /// <summary>
-    /// 分发到所有目标
+    /// 分发到所有目标（优化：快速路径使用 TryWrite，慢速路径并行等待）
     /// </summary>
     private async ValueTask DispatchAsync(TelemetryPoint point, CancellationToken ct)
     {
-        // 并行写入所有目标（非阻塞）
+        // 快速路径：所有目标都能立即写入
+        var allWritten = true;
+        var pendingTargets = new List<ChannelWriter<TelemetryPoint>>();
+
         foreach (var target in _targets)
         {
             if (!target.TryWrite(point))
             {
-                // 目标满，尝试等待（短超时）
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromMilliseconds(10));
-                
-                try
-                {
-                    await target.WriteAsync(point, cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    // 超时，记录但不阻塞
-                    Interlocked.Increment(ref _totalDroppedByTarget);
-                }
+                allWritten = false;
+                pendingTargets.Add(target);
             }
+        }
+
+        if (allWritten)
+            return;
+
+        // 慢速路径：对无法立即写入的目标进行短超时等待
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromMilliseconds(10));
+
+        var pendingTasks = pendingTargets.Select(async target =>
+        {
+            try
+            {
+                await target.WriteAsync(point, cts.Token);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+        });
+
+        var results = await Task.WhenAll(pendingTasks);
+        var dropped = results.Count(r => !r);
+        if (dropped > 0)
+        {
+            Interlocked.Add(ref _totalDroppedByTarget, dropped);
         }
     }
     

@@ -115,6 +115,12 @@ LIMIT {limit} OFFSET {offset};";
         return rows;
     }
 
+    public async Task<int> DeleteBeforeAsync(long cutoffTs, CancellationToken ct)
+    {
+        const string sql = "DELETE FROM audit_log WHERE ts < @CutoffTs";
+        return await _db.ExecuteNonQueryAsync(sql, new { CutoffTs = cutoffTs }, ct);
+    }
+
     private static AuditLogEntry MapEntry(SqliteDataReader reader)
     {
         return new AuditLogEntry

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Card, Col, Descriptions, Divider, Form, InputNumber, message, Popconfirm, Row, Space, Spin } from 'antd'
+import { Alert, Button, Card, Col, Descriptions, Divider, Form, InputNumber, message, Popconfirm, Row, Space, Spin, Typography } from 'antd'
+
+const { Text } = Typography
 import { ReloadOutlined, SaveOutlined, DeleteOutlined } from '@ant-design/icons'
 import { cleanupData, getAllSettings, getSystemInfo, setSetting, type CleanupResult, type SystemInfo, type SystemSetting } from '../../api/settings'
 import PageHeader from '../../components/common/PageHeader'

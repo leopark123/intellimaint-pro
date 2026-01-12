@@ -27,7 +27,10 @@ import {
   RotateCcw,
   ListChecks,
   Sun,
-  Moon
+  Moon,
+  Layers,
+  Activity,
+  Cpu,
 } from 'lucide-react'
 import { useAuth } from '../../store/authStore'
 import useTheme from '../../hooks/useTheme'
@@ -59,6 +62,9 @@ const menuGroups: MenuGroup[] = [
     icon: <Brain size={18} />,
     children: [
       { key: '/dashboard', icon: <LayoutDashboard size={18} />, label: '实时监控' },
+      { key: '/health-assessment', icon: <Heart size={18} />, label: '健康评估' },
+      { key: '/motor-prediction', icon: <Cpu size={18} />, label: '电机故障预测' },
+      { key: '/prediction-alerts', icon: <Activity size={18} />, label: '预测预警' },
       { key: '/anomaly-detection', icon: <AlertTriangle size={18} />, label: '异常检测' },
       { key: '/predictive-maintenance', icon: <Wrench size={18} />, label: '预测性维护' },
       { key: '/model-optimization', icon: <TrendingUp size={18} />, label: '持续优化' },
@@ -90,6 +96,7 @@ const menuGroups: MenuGroup[] = [
     icon: <Bell size={18} />,
     children: [
       { key: '/alarm-management', icon: <Bell size={18} />, label: '告警管理' },
+      { key: '/alarm-groups', icon: <Layers size={18} />, label: '告警聚合' },
       { key: '/alarm-rules', icon: <Zap size={18} />, label: '告警规则' }
     ]
   },
@@ -99,6 +106,7 @@ const menuGroups: MenuGroup[] = [
     icon: <Shield size={18} />,
     children: [
       { key: '/system-health', icon: <Heart size={18} />, label: '系统健康' },
+      { key: '/edge-config', icon: <Server size={18} />, label: 'Edge配置', roles: ['Admin', 'Operator'] },
       { key: '/audit-log', icon: <FileSearch size={18} />, label: '审计日志' },
       { key: '/user-management', icon: <Users size={18} />, label: '用户管理', roles: ['Admin'] },
       { key: '/settings', icon: <Settings size={18} />, label: '系统设置' }

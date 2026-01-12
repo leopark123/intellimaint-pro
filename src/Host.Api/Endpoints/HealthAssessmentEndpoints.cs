@@ -37,6 +37,15 @@ public static class HealthAssessmentEndpoints
         
         // 获取所有基线列表
         group.MapGet("/baselines", ListBaselinesAsync);
+
+        // v60: 获取设备健康历史趋势
+        group.MapGet("/devices/{deviceId}/history", GetDeviceHealthHistoryAsync);
+
+        // v60: 获取健康汇总统计
+        group.MapGet("/summary", GetHealthSummaryAsync);
+
+        // v62: 获取设备多尺度健康评估
+        group.MapGet("/devices/{deviceId}/multi-scale", GetMultiScaleAssessmentAsync);
     }
 
     /// <summary>
@@ -176,6 +185,144 @@ public static class HealthAssessmentEndpoints
             success = true, 
             data = baselines.Select(MapBaselineToDto).ToList() 
         });
+    }
+
+    /// <summary>
+    /// v60: 获取设备健康历史趋势
+    /// </summary>
+    private static async Task<IResult> GetDeviceHealthHistoryAsync(
+        string deviceId,
+        [FromQuery] long? startTs,
+        [FromQuery] long? endTs,
+        [FromServices] IDeviceHealthSnapshotRepository snapshotRepo,
+        CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var start = startTs ?? (now - 24 * 60 * 60 * 1000); // 默认24小时
+        var end = endTs ?? now;
+
+        var history = await snapshotRepo.GetHistoryAsync(deviceId, start, end, ct);
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                deviceId,
+                startTs = start,
+                endTs = end,
+                count = history.Count,
+                snapshots = history.Select(MapSnapshotToDto).ToList()
+            }
+        });
+    }
+
+    /// <summary>
+    /// v60: 获取健康汇总统计
+    /// </summary>
+    private static async Task<IResult> GetHealthSummaryAsync(
+        [FromServices] IDeviceHealthSnapshotRepository snapshotRepo,
+        CancellationToken ct)
+    {
+        // 获取所有设备最新快照
+        var latestSnapshots = await snapshotRepo.GetLatestAllAsync(ct);
+
+        // 统计各级别设备数量
+        int healthyCount = 0, attentionCount = 0, warningCount = 0, criticalCount = 0;
+        double totalIndex = 0;
+
+        foreach (var snapshot in latestSnapshots)
+        {
+            totalIndex += snapshot.Index;
+            switch (snapshot.Level)
+            {
+                case HealthLevel.Healthy: healthyCount++; break;
+                case HealthLevel.Attention: attentionCount++; break;
+                case HealthLevel.Warning: warningCount++; break;
+                case HealthLevel.Critical: criticalCount++; break;
+            }
+        }
+
+        var deviceCount = latestSnapshots.Count;
+        var avgIndex = deviceCount > 0 ? (int)Math.Round(totalIndex / deviceCount) : 0;
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                assessedDevices = deviceCount,
+                avgHealthIndex = avgIndex,
+                distribution = new
+                {
+                    healthy = healthyCount,
+                    attention = attentionCount,
+                    warning = warningCount,
+                    critical = criticalCount
+                },
+                devices = latestSnapshots.Select(s => new
+                {
+                    deviceId = s.DeviceId,
+                    index = s.Index,
+                    level = s.Level.ToString().ToLower(),
+                    timestamp = s.Timestamp
+                }).ToList()
+            }
+        });
+    }
+
+    /// <summary>
+    /// v62: 获取设备多尺度健康评估
+    /// </summary>
+    private static async Task<IResult> GetMultiScaleAssessmentAsync(
+        string deviceId,
+        [FromServices] IMultiScaleAssessmentService multiScaleService,
+        CancellationToken ct)
+    {
+        var score = await multiScaleService.AssessAsync(deviceId, ct);
+
+        if (score == null)
+        {
+            return Results.NotFound(new
+            {
+                success = false,
+                error = $"No data available for multi-scale assessment of device {deviceId}"
+            });
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                deviceId,
+                shortTermScore = score.ShortTermScore,
+                mediumTermScore = score.MediumTermScore,
+                longTermScore = score.LongTermScore,
+                compositeScore = score.CompositeScore,
+                trendDirection = score.TrendDirection,
+                trendDescription = score.TrendDescription,
+                summary = multiScaleService.GetSummary(score)
+            }
+        });
+    }
+
+    /// <summary>
+    /// 映射快照到 DTO
+    /// </summary>
+    private static object MapSnapshotToDto(DeviceHealthSnapshot snapshot)
+    {
+        return new
+        {
+            deviceId = snapshot.DeviceId,
+            timestamp = snapshot.Timestamp,
+            index = snapshot.Index,
+            level = snapshot.Level.ToString().ToLower(),
+            deviationScore = snapshot.DeviationScore,
+            trendScore = snapshot.TrendScore,
+            stabilityScore = snapshot.StabilityScore,
+            alarmScore = snapshot.AlarmScore
+        };
     }
 
     /// <summary>

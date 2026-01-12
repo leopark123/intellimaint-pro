@@ -139,6 +139,33 @@ WHERE a.alarm_id = @AlarmId;";
         return await _db.QuerySingleAsync(sql, MapAlarm, new { AlarmId = alarmId }, ct);
     }
 
+    /// <summary>批量获取告警（优化N+1查询）</summary>
+    public async Task<IReadOnlyList<AlarmRecord>> GetByIdsAsync(IEnumerable<string> alarmIds, CancellationToken ct)
+    {
+        var idList = alarmIds.ToList();
+        if (idList.Count == 0)
+            return Array.Empty<AlarmRecord>();
+
+        // SQLite 使用 IN 子句进行批量查询
+        var placeholders = string.Join(",", idList.Select((_, i) => $"@Id{i}"));
+        var sql = $@"
+SELECT a.alarm_id, a.device_id, a.tag_id, a.ts, a.severity, a.code, a.message,
+       a.status, a.created_utc, a.updated_utc,
+       k.acked_by, k.acked_utc, k.ack_note
+FROM alarm a
+LEFT JOIN alarm_ack k ON a.alarm_id = k.alarm_id
+WHERE a.alarm_id IN ({placeholders})
+ORDER BY a.ts DESC;";
+
+        var parameters = new Dictionary<string, object?>();
+        for (var i = 0; i < idList.Count; i++)
+        {
+            parameters[$"Id{i}"] = idList[i];
+        }
+
+        return await _db.QueryAsync(sql, MapAlarm, parameters, ct);
+    }
+
     public async Task<PagedResult<AlarmRecord>> QueryAsync(AlarmQuery query, CancellationToken ct)
     {
         // 说明：
@@ -190,46 +217,45 @@ WHERE a.alarm_id = @AlarmId;";
         var limit = query.Limit <= 0 ? 100 : Math.Min(query.Limit, 1000);
         parameters["Limit"] = limit;
 
+        // v56.1: 使用窗口函数 COUNT(*) OVER() 和子查询获取 rowid，避免多次查询
         var sql = $@"
 SELECT a.alarm_id, a.device_id, a.tag_id, a.ts, a.severity, a.code, a.message,
-       a.status, a.created_utc, a.updated_utc,
-       k.acked_by, k.acked_utc, k.ack_note
+       a.status, a.created_utc, a.updated_utc, a.rowid,
+       k.acked_by, k.acked_utc, k.ack_note,
+       COUNT(*) OVER() as total_count
 FROM alarm a
 LEFT JOIN alarm_ack k ON a.alarm_id = k.alarm_id
 {whereClause}
 ORDER BY a.ts DESC, a.rowid DESC
 LIMIT @Limit;";
 
-        var items = await _db.QueryAsync(sql, MapAlarm, parameters, ct);
-
-        // totalCount：为了简单与准确，单独 COUNT（可接受，limit 默认 100）
-        var countSql = $@"
-SELECT COUNT(1)
-FROM alarm a
-{whereClause};";
-
-        var totalCount = await _db.ExecuteScalarAsync<long>(countSql, parameters, ct);
+        long totalCount = 0;
+        long lastRowId = 0;
+        var items = await _db.QueryAsync(sql, reader =>
+        {
+            // 每行都有 total_count 和 rowid，只取一次 total_count
+            if (totalCount == 0)
+            {
+                totalCount = reader.GetInt64(reader.GetOrdinal("total_count"));
+            }
+            lastRowId = reader.GetInt64(reader.GetOrdinal("rowid"));
+            return MapAlarm(reader);
+        }, parameters, ct);
 
         if (items.Count == 0)
         {
             return PagedResult<AlarmRecord>.Empty() with
             {
-                TotalCount = (int)Math.Min(totalCount, int.MaxValue)
+                TotalCount = 0
             };
         }
-
-        // 下一页 token：最后一条记录的 (ts, rowid)
-        // rowid 需要额外查询：使用 (alarm_id) 反查 rowid
-        var last = items[^1];
-        const string rowidSql = @"SELECT rowid FROM alarm WHERE alarm_id = @AlarmId;";
-        var lastRowId = await _db.ExecuteScalarAsync<long>(rowidSql, new { AlarmId = last.AlarmId }, ct);
 
         var hasMore = items.Count == limit;
 
         return new PagedResult<AlarmRecord>
         {
             Items = items,
-            NextToken = hasMore ? new PageToken(last.Ts, lastRowId) : null,
+            NextToken = hasMore ? new PageToken(items[^1].Ts, lastRowId) : null,
             HasMore = hasMore,
             TotalCount = (int)Math.Min(totalCount, int.MaxValue)
         };
@@ -258,6 +284,50 @@ WHERE status = 0";
         return (int)Math.Min(count, int.MaxValue);
     }
 
+    /// <summary>批量获取设备的未关闭告警数量（优化N+1查询）</summary>
+    public async Task<IReadOnlyDictionary<string, int>> GetOpenCountByDevicesAsync(IEnumerable<string> deviceIds, CancellationToken ct)
+    {
+        var idList = deviceIds.ToList();
+        if (idList.Count == 0)
+            return new Dictionary<string, int>();
+
+        // 使用 GROUP BY 进行批量查询
+        var placeholders = string.Join(",", idList.Select((_, i) => $"@Id{i}"));
+        var sql = $@"
+SELECT device_id, COUNT(1) as cnt
+FROM alarm
+WHERE status = 0 AND device_id IN ({placeholders})
+GROUP BY device_id;";
+
+        var parameters = new Dictionary<string, object?>();
+        for (var i = 0; i < idList.Count; i++)
+        {
+            parameters[$"Id{i}"] = idList[i];
+        }
+
+        var result = new Dictionary<string, int>();
+        var rows = await _db.QueryAsync(sql, reader =>
+        {
+            var deviceId = reader.GetString(0);
+            var cnt = reader.GetInt64(1);
+            return (deviceId, count: (int)Math.Min(cnt, int.MaxValue));
+        }, parameters, ct);
+
+        foreach (var (deviceId, count) in rows)
+        {
+            result[deviceId] = count;
+        }
+
+        // 确保所有请求的 deviceId 都有返回值（没有告警的设备返回 0）
+        foreach (var deviceId in idList)
+        {
+            if (!result.ContainsKey(deviceId))
+                result[deviceId] = 0;
+        }
+
+        return result;
+    }
+
     public async Task<int> DeleteBeforeAsync(long cutoffTs, CancellationToken ct)
     {
         // 先删除关联的 alarm_ack 记录
@@ -269,6 +339,80 @@ WHERE alarm_id IN (SELECT alarm_id FROM alarm WHERE ts < @CutoffTs);";
 
         await _db.ExecuteNonQueryAsync(deleteAckSql, new { CutoffTs = cutoffTs }, ct);
         return await _db.ExecuteNonQueryAsync(deleteAlarmSql, new { CutoffTs = cutoffTs }, ct);
+    }
+
+    public async Task<bool> HasUnclosedByCodeAsync(string code, CancellationToken ct)
+    {
+        const string sql = @"
+SELECT COUNT(*)
+FROM alarm
+WHERE code = @Code AND status <> 2;";
+
+        var count = await _db.ExecuteScalarAsync<long>(sql, new { Code = code }, ct);
+        return count > 0;
+    }
+
+    public async Task<IReadOnlyList<AlarmTrendBucket>> GetTrendAsync(AlarmTrendQuery query, CancellationToken ct)
+    {
+        var conditions = new List<string>();
+        var parameters = new Dictionary<string, object?>();
+
+        if (!string.IsNullOrWhiteSpace(query.DeviceId))
+        {
+            conditions.Add("device_id = @DeviceId");
+            parameters["DeviceId"] = query.DeviceId;
+        }
+
+        if (query.StartTs.HasValue)
+        {
+            conditions.Add("ts >= @StartTs");
+            parameters["StartTs"] = query.StartTs.Value;
+        }
+
+        if (query.EndTs.HasValue)
+        {
+            conditions.Add("ts <= @EndTs");
+            parameters["EndTs"] = query.EndTs.Value;
+        }
+
+        var whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
+        var bucketSize = query.BucketSizeMs > 0 ? query.BucketSizeMs : 3600000;
+        var limit = query.Limit > 0 ? Math.Min(query.Limit ?? 168, 500) : 168;
+
+        parameters["BucketSize"] = bucketSize;
+        parameters["Limit"] = limit;
+
+        // SQLite uses integer division for time bucketing
+        var sql = $@"
+SELECT
+    (ts / @BucketSize) * @BucketSize AS bucket,
+    device_id,
+    COUNT(*) AS total_count,
+    SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS open_count,
+    SUM(CASE WHEN severity >= 4 THEN 1 ELSE 0 END) AS critical_count,
+    SUM(CASE WHEN severity = 2 OR severity = 3 THEN 1 ELSE 0 END) AS warning_count
+FROM alarm
+{whereClause}
+GROUP BY (ts / @BucketSize) * @BucketSize, device_id
+ORDER BY bucket DESC
+LIMIT @Limit;";
+
+        var results = await _db.QueryAsync(sql, reader =>
+        {
+            return new AlarmTrendBucket
+            {
+                Bucket = reader.GetInt64(reader.GetOrdinal("bucket")),
+                DeviceId = reader.IsDBNull(reader.GetOrdinal("device_id"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("device_id")),
+                TotalCount = reader.GetInt32(reader.GetOrdinal("total_count")),
+                OpenCount = reader.GetInt32(reader.GetOrdinal("open_count")),
+                CriticalCount = reader.GetInt32(reader.GetOrdinal("critical_count")),
+                WarningCount = reader.GetInt32(reader.GetOrdinal("warning_count"))
+            };
+        }, parameters, ct);
+
+        return results;
     }
 
     private static AlarmRecord MapAlarm(SqliteDataReader reader)

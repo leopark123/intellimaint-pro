@@ -6,25 +6,34 @@ namespace IntelliMaint.Core.Contracts;
 public sealed class EdgeOptions
 {
     public const string SectionName = "Edge";
-    
+
     /// <summary>Edge 实例ID</summary>
     public required string EdgeId { get; init; }
-    
-    /// <summary>数据库路径</summary>
-    public required string DatabasePath { get; init; }
-    
+
+    /// <summary>数据库路径（SQLite 模式使用，TimescaleDB 模式可为空）</summary>
+    public string? DatabasePath { get; init; }
+
+    /// <summary>API 基础地址（用于健康上报）</summary>
+    public string ApiBaseUrl { get; init; } = "http://localhost:5000";
+
     /// <summary>全局队列容量</summary>
     public int QueueCapacityGlobal { get; init; } = 200_000;
-    
+
     /// <summary>写入批量大小</summary>
-    public int WriterBatchSize { get; init; } = 500;
-    
+    public int WriterBatchSize { get; init; } = 1000;
+
     /// <summary>写入刷新间隔（毫秒）</summary>
-    public int WriterFlushMs { get; init; } = 200;
-    
+    public int WriterFlushMs { get; init; } = 500;
+
+    /// <summary>写入最大重试次数</summary>
+    public int WriterMaxRetries { get; init; } = 3;
+
+    /// <summary>写入重试延迟（毫秒）</summary>
+    public int WriterRetryDelayMs { get; init; } = 1000;
+
     /// <summary>溢出导出配置</summary>
     public OverflowOptions Overflow { get; init; } = new();
-    
+
     /// <summary>健康检查配置</summary>
     public HealthOptions Health { get; init; } = new();
 }

@@ -23,18 +23,22 @@ try
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
 
-    // JSON 配置 - 使用 camelCase，并支持大小写不敏感的反序列化
+    // JSON 閰嶇疆 - 浣跨敤 camelCase锛屽苟鏀寔澶у皬鍐欎笉鏁忔劅鐨勫弽搴忓垪鍖?
     builder.Services.Configure<JsonOptions>(options =>
     {
         options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        options.SerializerOptions.PropertyNameCaseInsensitive = true;  // v56.1: 支持 PascalCase 和 camelCase 输入
+        options.SerializerOptions.PropertyNameCaseInsensitive = true;  // v56.1: 鏀寔 PascalCase 鍜?camelCase 杈撳叆
     });
 
     // Configuration
     builder.Services.Configure<EdgeOptions>(
         builder.Configuration.GetSection(EdgeOptions.SectionName));
 
-    // P2: Infrastructure - 根据配置选择数据库提供者
+    // v61: 健康评估配置
+    builder.Services.Configure<HealthAssessmentOptions>(
+        builder.Configuration.GetSection("HealthAssessment"));
+
+    // P2: Infrastructure - 鏍规嵁閰嶇疆閫夋嫨鏁版嵁搴撴彁渚涜€?
     var dbProvider = builder.Configuration["DatabaseProvider"] ?? "Sqlite";
     if (dbProvider.Equals("TimescaleDb", StringComparison.OrdinalIgnoreCase))
     {
@@ -56,21 +60,27 @@ try
     builder.Services.AddHealthChecks();
 
     // P2: SignalR
-    builder.Services.AddSignalR();
+    builder.Services.AddSignalR(options =>
+    {
+        options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+        options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+        options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+        options.EnableDetailedErrors = true;
+    });
 
-    // P2: 应用层服务（统一注册）
+    // P2: 搴旂敤灞傛湇鍔★紙缁熶竴娉ㄥ唽锛?
     builder.Services.AddApplicationServices();
 
-    // P2: 后台服务
+    // P2: 鍚庡彴鏈嶅姟
     builder.Services.AddBackgroundServices(builder.Configuration);
 
-    // P2: CORS 策略
+    // P2: CORS 绛栫暐
     builder.Services.AddCorsPolicies(builder.Configuration);
 
-    // P2: JWT 认证
+    // P2: JWT 璁よ瘉
     builder.Services.AddJwtAuthentication(builder.Configuration);
 
-    // P2: 授权策略
+    // P2: 鎺堟潈绛栫暐
     builder.Services.AddAuthorizationPolicies();
 
     var app = builder.Build();
@@ -86,13 +96,13 @@ try
     }
 
     // Middleware pipeline
-    // v48: 全局异常处理（应该在最外层）
+    // v48: 鍏ㄥ眬寮傚父澶勭悊锛堝簲璇ュ湪鏈€澶栧眰锛?
     app.UseGlobalExceptionHandler();
 
-    // v56.1: HTTPS 强制重定向（生产环境）
+    // v56.1: HTTPS 寮哄埗閲嶅畾鍚戯紙鐢熶骇鐜锛?
     if (!app.Environment.IsDevelopment())
     {
-        // HSTS - 强制浏览器使用 HTTPS（1年有效期）
+        // HSTS - 寮哄埗娴忚鍣ㄤ娇鐢?HTTPS锛?骞存湁鏁堟湡锛?
         app.UseHsts();
         app.UseHttpsRedirection();
         Log.Information("[Security] HTTPS redirection and HSTS enabled for production");
@@ -102,7 +112,7 @@ try
         Log.Warning("[Security] HTTPS redirection disabled in Development environment");
     }
 
-    // v56.1: Swagger 仅在开发环境启用
+    // v56.1: Swagger 浠呭湪寮€鍙戠幆澧冨惎鐢?
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
@@ -110,14 +120,14 @@ try
     }
     app.UseSerilogRequestLogging();
 
-    // v44: 请求限流 - 使用 SystemConstants 配置
+    // v44: 璇锋眰闄愭祦 - 浣跨敤 SystemConstants 閰嶇疆
     app.UseRateLimiting(options =>
     {
         options.WindowSeconds = SystemConstants.RateLimiting.WindowSeconds;
         options.MaxRequests = SystemConstants.RateLimiting.MaxRequests;
     });
 
-    // v56.1: CORS must be before endpoints - 根据环境选择策略
+    // v56.1: CORS must be before endpoints - 鏍规嵁鐜閫夋嫨绛栫暐
     var corsPolicy = app.Environment.IsDevelopment() ? "development" : "production";
     app.UseCors(corsPolicy);
     Log.Information("[Security] CORS policy: {Policy}", corsPolicy);
@@ -177,6 +187,15 @@ try
     // v47: Cycle Analysis API
     app.MapCycleAnalysisEndpoints();
 
+    // v63: Prediction & Alert API
+    app.MapPredictionEndpoints();
+
+    // v64: Motor Fault Prediction API
+    app.MapMotorEndpoints();
+
+    // v65: Edge Config Management API
+    app.MapEdgeConfigEndpoints();
+
     // SignalR Hub endpoint
     app.MapHub<TelemetryHub>("/hubs/telemetry");
 
@@ -191,5 +210,5 @@ finally
     Log.CloseAndFlush();
 }
 
-// 使 Program 类可被测试项目访问
+// 浣?Program 绫诲彲琚祴璇曢」鐩闂?
 public partial class Program { }

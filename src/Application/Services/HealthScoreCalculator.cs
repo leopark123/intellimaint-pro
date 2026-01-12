@@ -1,78 +1,83 @@
 using IntelliMaint.Core.Abstractions;
+using IntelliMaint.Core.Contracts;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace IntelliMaint.Application.Services;
 
 /// <summary>
-/// v45: 健康评分计算器实现
-/// 基于设备特征和基线计算健康指数
+/// v61: 健康评分计算器实现（增强版）
+/// 支持标签重要性加权和告警严重度加权
 /// </summary>
 public sealed class HealthScoreCalculator : IHealthScoreCalculator
 {
-    private readonly IAlarmRepository _alarmRepo;
+    private readonly ITagImportanceMatcher _importanceMatcher;
+    private readonly HealthAssessmentOptions _options;
     private readonly ILogger<HealthScoreCalculator> _logger;
 
-    // 权重配置
-    private const double DeviationWeight = 0.40;   // 偏差评分权重 40%
-    private const double TrendWeight = 0.30;       // 趋势评分权重 30%
-    private const double StabilityWeight = 0.20;   // 稳定性评分权重 20%
-    private const double AlarmWeight = 0.10;       // 告警评分权重 10%
-
     public HealthScoreCalculator(
-        IAlarmRepository alarmRepo,
+        ITagImportanceMatcher importanceMatcher,
+        IOptions<HealthAssessmentOptions> options,
         ILogger<HealthScoreCalculator> logger)
     {
-        _alarmRepo = alarmRepo;
+        _importanceMatcher = importanceMatcher;
+        _options = options.Value;
         _logger = logger;
     }
 
     /// <inheritdoc />
     public HealthScore Calculate(DeviceFeatures features, DeviceBaseline? baseline)
     {
-        var problemTags = new List<string>();
+        var problemTags = new List<ProblemTagInfo>();
         var diagnosticMessages = new List<string>();
 
-        // 1. 计算偏差评分
-        int deviationScore = CalculateDeviationScore(features, baseline, problemTags, diagnosticMessages);
+        // 获取所有标签的重要性
+        var tagIds = features.TagFeatures.Keys.ToList();
+        var importances = _importanceMatcher.GetImportances(tagIds);
 
-        // 2. 计算趋势评分
-        int trendScore = CalculateTrendScore(features, problemTags, diagnosticMessages);
+        // 1. 计算偏差评分（加权）
+        int deviationScore = CalculateDeviationScore(features, baseline, importances, problemTags, diagnosticMessages);
 
-        // 3. 计算稳定性评分
-        int stabilityScore = CalculateStabilityScore(features, baseline, problemTags, diagnosticMessages);
+        // 2. 计算趋势评分（加权）
+        int trendScore = CalculateTrendScore(features, importances, problemTags, diagnosticMessages);
 
-        // 4. 计算告警评分（需要异步，这里简化处理）
-        int alarmScore = 100; // 默认满分，实际应该查询告警
+        // 3. 计算稳定性评分（加权）
+        int stabilityScore = CalculateStabilityScore(features, baseline, importances, problemTags, diagnosticMessages);
 
-        // 综合评分
-        double weightedScore = 
-            deviationScore * DeviationWeight +
-            trendScore * TrendWeight +
-            stabilityScore * StabilityWeight +
-            alarmScore * AlarmWeight;
+        // 4. 告警评分（默认满分，实际由 HealthAssessmentService 计算）
+        int alarmScore = 100;
+
+        // 综合评分（使用配置的权重）
+        var weights = _options.Weights;
+        double weightedScore =
+            deviationScore * weights.Deviation +
+            trendScore * weights.Trend +
+            stabilityScore * weights.Stability +
+            alarmScore * weights.Alarm;
 
         int healthIndex = (int)Math.Round(weightedScore);
         healthIndex = Math.Clamp(healthIndex, 0, 100);
 
-        // 确定健康等级
+        // 确定健康等级（使用配置的阈值）
+        var thresholds = _options.LevelThresholds;
         var level = healthIndex switch
         {
-            >= 80 => HealthLevel.Healthy,
-            >= 60 => HealthLevel.Attention,
-            >= 40 => HealthLevel.Warning,
+            _ when healthIndex >= thresholds.HealthyMin => HealthLevel.Healthy,
+            _ when healthIndex >= thresholds.AttentionMin => HealthLevel.Attention,
+            _ when healthIndex >= thresholds.WarningMin => HealthLevel.Warning,
             _ => HealthLevel.Critical
         };
 
         // 生成诊断消息
-        string? diagnosticMessage = diagnosticMessages.Count > 0 
-            ? string.Join("; ", diagnosticMessages.Take(3)) 
+        string? diagnosticMessage = diagnosticMessages.Count > 0
+            ? string.Join("; ", diagnosticMessages.Take(3))
             : null;
 
         _logger.LogDebug(
             "Health score for {DeviceId}: Index={Index}, Level={Level}, " +
-            "Deviation={Deviation}, Trend={Trend}, Stability={Stability}, Alarm={Alarm}",
-            features.DeviceId, healthIndex, level, 
-            deviationScore, trendScore, stabilityScore, alarmScore);
+            "Deviation={Deviation}, Trend={Trend}, Stability={Stability}, ProblemTags={ProblemCount}",
+            features.DeviceId, healthIndex, level,
+            deviationScore, trendScore, stabilityScore, problemTags.Count);
 
         return new HealthScore
         {
@@ -85,204 +90,245 @@ public sealed class HealthScoreCalculator : IHealthScoreCalculator
             StabilityScore = stabilityScore,
             AlarmScore = alarmScore,
             HasBaseline = baseline != null,
-            ProblemTags = problemTags.Distinct().ToList(),
+            ProblemTags = problemTags.Select(p => p.TagId).Distinct().ToList(),
             DiagnosticMessage = diagnosticMessage
         };
     }
 
     /// <summary>
-    /// 计算偏差评分
-    /// 衡量当前值与基线的偏离程度
+    /// 计算偏差评分（加权版）
     /// </summary>
     private int CalculateDeviationScore(
         DeviceFeatures features,
         DeviceBaseline? baseline,
-        List<string> problemTags,
+        IReadOnlyDictionary<string, TagImportance> importances,
+        List<ProblemTagInfo> problemTags,
         List<string> messages)
     {
         if (baseline == null || baseline.TagBaselines.Count == 0)
         {
-            // 无基线时，返回默认评分
-            return 80;
+            return 80; // 无基线时返回默认评分
         }
 
-        var scores = new List<double>();
+        double totalWeight = 0;
+        double weightedSum = 0;
 
         foreach (var (tagId, tagFeatures) in features.TagFeatures)
         {
             if (!baseline.TagBaselines.TryGetValue(tagId, out var tagBaseline))
             {
-                continue; // 该标签无基线
+                continue;
             }
 
-            // 计算 Z-Score（当前均值与基线均值的标准差距离）
+            // 计算 Z-Score
             double zScore = 0;
             if (tagBaseline.NormalStdDev > 0)
             {
                 zScore = Math.Abs(tagFeatures.Mean - tagBaseline.NormalMean) / tagBaseline.NormalStdDev;
             }
 
-            // Z-Score 转换为评分 (0-100)
-            // Z=0 → 100分, Z=2 → 80分, Z=4 → 60分, Z=6 → 40分, Z≥8 → 20分
+            // Z-Score 转换为评分
             double score = Math.Max(100 - zScore * 10, 20);
-            scores.Add(score);
 
-            // 记录问题标签
-            if (zScore > 3)
+            // 获取标签权重
+            var importance = importances.GetValueOrDefault(tagId, _options.DefaultTagImportance);
+            var weight = (int)importance;
+
+            weightedSum += score * weight;
+            totalWeight += weight;
+
+            // 记录问题标签（关键标签阈值更低）
+            double zThreshold = importance switch
             {
-                problemTags.Add(tagId);
+                TagImportance.Critical => 2.0,
+                TagImportance.Major => 2.5,
+                TagImportance.Minor => 3.0,
+                _ => 3.5
+            };
+
+            if (zScore > zThreshold)
+            {
+                problemTags.Add(new ProblemTagInfo
+                {
+                    TagId = tagId,
+                    Importance = importance,
+                    ProblemType = "Deviation",
+                    Description = $"偏离基线 {zScore:F1}σ",
+                    ZScore = zScore
+                });
                 messages.Add($"{tagId} 偏离基线 {zScore:F1}σ");
             }
         }
 
-        return scores.Count > 0 ? (int)Math.Round(scores.Average()) : 80;
+        return totalWeight > 0 ? (int)Math.Round(weightedSum / totalWeight) : 80;
     }
 
     /// <summary>
-    /// 计算趋势评分
-    /// 衡量数据变化趋势
+    /// 计算趋势评分（加权版）
     /// </summary>
     private int CalculateTrendScore(
         DeviceFeatures features,
-        List<string> problemTags,
+        IReadOnlyDictionary<string, TagImportance> importances,
+        List<ProblemTagInfo> problemTags,
         List<string> messages)
     {
-        var scores = new List<double>();
+        double totalWeight = 0;
+        double weightedSum = 0;
 
         foreach (var (tagId, tagFeatures) in features.TagFeatures)
         {
             double score = 100;
 
-            // 根据趋势方向和斜率评分
-            // 上升或下降趋势都可能是问题（取决于具体标签语义）
-            // 这里简单处理：斜率越大，扣分越多
-            double normalizedSlope = tagFeatures.Mean != 0 
-                ? Math.Abs(tagFeatures.TrendSlope) / Math.Abs(tagFeatures.Mean) * 100 
+            double normalizedSlope = tagFeatures.Mean != 0
+                ? Math.Abs(tagFeatures.TrendSlope) / Math.Abs(tagFeatures.Mean) * 100
                 : 0;
 
-            // 每 1% 的斜率扣 5 分
             score -= normalizedSlope * 5;
             score = Math.Max(score, 20);
 
-            scores.Add(score);
+            var importance = importances.GetValueOrDefault(tagId, _options.DefaultTagImportance);
+            var weight = (int)importance;
 
-            // 显著趋势记录
-            if (tagFeatures.TrendDirection != 0 && normalizedSlope > 1)
+            weightedSum += score * weight;
+            totalWeight += weight;
+
+            // 关键标签的趋势变化阈值更低
+            double trendThreshold = importance switch
+            {
+                TagImportance.Critical => 0.5,
+                TagImportance.Major => 0.8,
+                _ => 1.0
+            };
+
+            if (tagFeatures.TrendDirection != 0 && normalizedSlope > trendThreshold)
             {
                 string direction = tagFeatures.TrendDirection > 0 ? "上升" : "下降";
-                problemTags.Add(tagId);
+                problemTags.Add(new ProblemTagInfo
+                {
+                    TagId = tagId,
+                    Importance = importance,
+                    ProblemType = "Trend",
+                    Description = $"呈{direction}趋势 ({normalizedSlope:F1}%)"
+                });
                 messages.Add($"{tagId} 呈{direction}趋势");
             }
         }
 
-        return scores.Count > 0 ? (int)Math.Round(scores.Average()) : 100;
+        return totalWeight > 0 ? (int)Math.Round(weightedSum / totalWeight) : 100;
     }
 
     /// <summary>
-    /// 计算稳定性评分
-    /// 衡量数据波动程度
+    /// 计算稳定性评分（加权版）
     /// </summary>
     private int CalculateStabilityScore(
         DeviceFeatures features,
         DeviceBaseline? baseline,
-        List<string> problemTags,
+        IReadOnlyDictionary<string, TagImportance> importances,
+        List<ProblemTagInfo> problemTags,
         List<string> messages)
     {
-        var scores = new List<double>();
+        double totalWeight = 0;
+        double weightedSum = 0;
 
         foreach (var (tagId, tagFeatures) in features.TagFeatures)
         {
             double score = 100;
-            double cvThreshold = 0.2; // 默认 CV 阈值
+            double cvThreshold = 0.2;
 
-            // 如果有基线，使用基线的 CV 作为参考
             if (baseline?.TagBaselines.TryGetValue(tagId, out var tagBaseline) == true)
             {
-                cvThreshold = tagBaseline.NormalCV * 1.5; // 允许 1.5 倍波动
-                cvThreshold = Math.Max(cvThreshold, 0.1); // 最小阈值
+                cvThreshold = tagBaseline.NormalCV * 1.5;
+                cvThreshold = Math.Max(cvThreshold, 0.1);
             }
 
-            // 当前 CV 超过阈值时扣分
             if (tagFeatures.CoefficientOfVariation > cvThreshold)
             {
                 double excess = tagFeatures.CoefficientOfVariation / cvThreshold;
-                score -= (excess - 1) * 30; // 每超过 1 倍扣 30 分
+                score -= (excess - 1) * 30;
                 score = Math.Max(score, 20);
 
-                problemTags.Add(tagId);
+                var importance = importances.GetValueOrDefault(tagId, _options.DefaultTagImportance);
+
+                problemTags.Add(new ProblemTagInfo
+                {
+                    TagId = tagId,
+                    Importance = importance,
+                    ProblemType = "Stability",
+                    Description = $"波动异常 (CV={tagFeatures.CoefficientOfVariation:F2})"
+                });
                 messages.Add($"{tagId} 波动异常 (CV={tagFeatures.CoefficientOfVariation:F2})");
             }
 
-            scores.Add(score);
+            var imp = importances.GetValueOrDefault(tagId, _options.DefaultTagImportance);
+            var weight = (int)imp;
+
+            weightedSum += score * weight;
+            totalWeight += weight;
         }
 
-        return scores.Count > 0 ? (int)Math.Round(scores.Average()) : 100;
+        return totalWeight > 0 ? (int)Math.Round(weightedSum / totalWeight) : 100;
     }
 }
 
 /// <summary>
-/// v45: 健康评分计算器（含异步告警查询）
+/// v61: 告警评分计算器
+/// 支持严重度加权和持续时间加权
 /// </summary>
-public sealed class HealthScoreCalculatorAsync
+public static class AlarmScoreCalculator
 {
-    private readonly IHealthScoreCalculator _calculator;
-    private readonly IAlarmRepository _alarmRepo;
-
-    public HealthScoreCalculatorAsync(
-        IHealthScoreCalculator calculator,
-        IAlarmRepository alarmRepo)
+    /// <summary>
+    /// 根据告警列表计算告警评分
+    /// </summary>
+    public static int CalculateAlarmScore(
+        IEnumerable<AlarmRecord> openAlarms,
+        AlarmScoreConfig config)
     {
-        _calculator = calculator;
-        _alarmRepo = alarmRepo;
+        var alarmList = openAlarms.ToList();
+        if (alarmList.Count == 0)
+            return 100;
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        int totalPenalty = 0;
+
+        foreach (var alarm in alarmList)
+        {
+            // 基础扣分（按严重度）
+            int basePenalty = alarm.Severity switch
+            {
+                >= 4 => config.CriticalPenalty,  // Critical (4-5)
+                3 => config.ErrorPenalty,         // Error
+                2 => config.WarningPenalty,       // Warning
+                _ => config.InfoPenalty           // Info
+            };
+
+            // 持续时间加权
+            double multiplier = 1.0;
+            if (config.ConsiderDuration)
+            {
+                long durationMs = now - alarm.Ts;
+                double durationHours = durationMs / 3600000.0;
+                multiplier = 1 + Math.Min(durationHours * config.DurationFactorPerHour, config.MaxDurationMultiplier - 1);
+            }
+
+            totalPenalty += (int)(basePenalty * multiplier);
+        }
+
+        // 限制最低分数
+        return Math.Max(100 - totalPenalty, config.MinScore);
     }
 
     /// <summary>
-    /// 计算健康评分（含告警查询）
+    /// 简化版：仅按告警数量计算（兼容旧逻辑）
     /// </summary>
-    public async Task<HealthScore> CalculateAsync(
-        DeviceFeatures features, 
-        DeviceBaseline? baseline,
-        CancellationToken ct)
+    public static int CalculateByCount(int openAlarmCount)
     {
-        // 先计算基础分数
-        var score = _calculator.Calculate(features, baseline);
-
-        // 查询未关闭的告警数量
-        int openAlarmCount = await _alarmRepo.GetOpenCountAsync(features.DeviceId, ct);
-
-        // 根据告警数量调整分数
-        int alarmScore = openAlarmCount switch
+        return openAlarmCount switch
         {
             0 => 100,
             1 => 80,
             2 => 60,
             3 => 40,
             _ => 20
-        };
-
-        // 重新计算综合分数
-        double weightedScore = 
-            score.DeviationScore * 0.40 +
-            score.TrendScore * 0.30 +
-            score.StabilityScore * 0.20 +
-            alarmScore * 0.10;
-
-        int healthIndex = (int)Math.Round(weightedScore);
-        healthIndex = Math.Clamp(healthIndex, 0, 100);
-
-        var level = healthIndex switch
-        {
-            >= 80 => HealthLevel.Healthy,
-            >= 60 => HealthLevel.Attention,
-            >= 40 => HealthLevel.Warning,
-            _ => HealthLevel.Critical
-        };
-
-        return score with
-        {
-            Index = healthIndex,
-            Level = level,
-            AlarmScore = alarmScore
         };
     }
 }

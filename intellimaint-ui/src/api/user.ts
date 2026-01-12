@@ -26,6 +26,10 @@ export async function disableUser(userId: string): Promise<ApiResponse<void>> {
   return apiClient.delete(`/users/${encodeURIComponent(userId)}`)
 }
 
+export async function enableUser(userId: string): Promise<ApiResponse<User>> {
+  return apiClient.put(`/users/${encodeURIComponent(userId)}`, { enabled: true })
+}
+
 export async function changePassword(request: ChangePasswordRequest): Promise<ApiResponse<void>> {
   return apiClient.put('/users/password', request)
 }

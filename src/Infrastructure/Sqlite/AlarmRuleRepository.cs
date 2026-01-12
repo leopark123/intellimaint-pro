@@ -21,7 +21,8 @@ public sealed class AlarmRuleRepository : IAlarmRuleRepository
     {
         const string sql = @"
 SELECT rule_id, name, description, tag_id, device_id, condition_type, threshold,
-       duration_ms, severity, message_template, enabled, created_utc, updated_utc
+       duration_ms, severity, message_template, enabled, created_utc, updated_utc,
+       roc_window_ms, rule_type
 FROM alarm_rule
 ORDER BY name, rule_id;";
 
@@ -32,7 +33,8 @@ ORDER BY name, rule_id;";
     {
         const string sql = @"
 SELECT rule_id, name, description, tag_id, device_id, condition_type, threshold,
-       duration_ms, severity, message_template, enabled, created_utc, updated_utc
+       duration_ms, severity, message_template, enabled, created_utc, updated_utc,
+       roc_window_ms, rule_type
 FROM alarm_rule
 WHERE enabled = 1
 ORDER BY name, rule_id;";
@@ -44,7 +46,8 @@ ORDER BY name, rule_id;";
     {
         const string sql = @"
 SELECT rule_id, name, description, tag_id, device_id, condition_type, threshold,
-       duration_ms, severity, message_template, enabled, created_utc, updated_utc
+       duration_ms, severity, message_template, enabled, created_utc, updated_utc,
+       roc_window_ms, rule_type
 FROM alarm_rule
 WHERE rule_id = @RuleId;";
 
@@ -57,10 +60,12 @@ WHERE rule_id = @RuleId;";
         const string sql = @"
 INSERT INTO alarm_rule (
     rule_id, name, description, tag_id, device_id, condition_type, threshold,
-    duration_ms, severity, message_template, enabled, created_utc, updated_utc
+    duration_ms, severity, message_template, enabled, created_utc, updated_utc,
+    roc_window_ms, rule_type
 ) VALUES (
     @RuleId, @Name, @Description, @TagId, @DeviceId, @ConditionType, @Threshold,
-    @DurationMs, @Severity, @MessageTemplate, @Enabled, @CreatedUtc, @UpdatedUtc
+    @DurationMs, @Severity, @MessageTemplate, @Enabled, @CreatedUtc, @UpdatedUtc,
+    @RocWindowMs, @RuleType
 )
 ON CONFLICT(rule_id) DO UPDATE SET
     name = @Name,
@@ -73,7 +78,9 @@ ON CONFLICT(rule_id) DO UPDATE SET
     severity = @Severity,
     message_template = @MessageTemplate,
     enabled = @Enabled,
-    updated_utc = @UpdatedUtc;";
+    updated_utc = @UpdatedUtc,
+    roc_window_ms = @RocWindowMs,
+    rule_type = @RuleType;";
 
         await _db.ExecuteNonQueryAsync(sql, new
         {
@@ -89,7 +96,9 @@ ON CONFLICT(rule_id) DO UPDATE SET
             rule.MessageTemplate,
             Enabled = rule.Enabled ? 1 : 0,
             rule.CreatedUtc,
-            rule.UpdatedUtc
+            rule.UpdatedUtc,
+            rule.RocWindowMs,
+            rule.RuleType
         }, ct);
     }
 
@@ -131,7 +140,10 @@ WHERE rule_id = @RuleId;";
             MessageTemplate = reader.IsDBNull(reader.GetOrdinal("message_template")) ? null : reader.GetString(reader.GetOrdinal("message_template")),
             Enabled = reader.GetInt32(reader.GetOrdinal("enabled")) == 1,
             CreatedUtc = reader.GetInt64(reader.GetOrdinal("created_utc")),
-            UpdatedUtc = reader.GetInt64(reader.GetOrdinal("updated_utc"))
+            UpdatedUtc = reader.GetInt64(reader.GetOrdinal("updated_utc")),
+            // v56 新增字段
+            RocWindowMs = reader.GetInt32(reader.GetOrdinal("roc_window_ms")),
+            RuleType = reader.GetString(reader.GetOrdinal("rule_type"))
         };
     }
 }

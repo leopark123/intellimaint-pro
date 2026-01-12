@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using IntelliMaint.Core.Abstractions;
 using IntelliMaint.Core.Contracts;
 using IntelliMaint.Host.Api.Models;
+using IntelliMaint.Host.Api.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -64,18 +65,30 @@ public static class AuditLogEndpoints
 
     private static async Task<IResult> GetActionsAsync(
         [FromServices] IAuditLogRepository repo,
+        [FromServices] CacheService cache,
         CancellationToken ct)
     {
-        var actions = await repo.GetDistinctActionsAsync(ct);
-        return Results.Ok(new ApiResponse<IReadOnlyList<string>> { Success = true, Data = actions });
+        // v56: 缓存 DISTINCT 查询结果（10分钟过期）
+        var actions = await cache.GetOrCreateAsync(
+            CacheService.Keys.AuditActions,
+            () => repo.GetDistinctActionsAsync(ct),
+            TimeSpan.FromMinutes(10));
+
+        return Results.Ok(new ApiResponse<IReadOnlyList<string>> { Success = true, Data = actions ?? Array.Empty<string>() });
     }
 
     private static async Task<IResult> GetResourceTypesAsync(
         [FromServices] IAuditLogRepository repo,
+        [FromServices] CacheService cache,
         CancellationToken ct)
     {
-        var types = await repo.GetDistinctResourceTypesAsync(ct);
-        return Results.Ok(new ApiResponse<IReadOnlyList<string>> { Success = true, Data = types });
+        // v56: 缓存 DISTINCT 查询结果（10分钟过期）
+        var types = await cache.GetOrCreateAsync(
+            CacheService.Keys.AuditResourceTypes,
+            () => repo.GetDistinctResourceTypesAsync(ct),
+            TimeSpan.FromMinutes(10));
+
+        return Results.Ok(new ApiResponse<IReadOnlyList<string>> { Success = true, Data = types ?? Array.Empty<string>() });
     }
 
     public sealed record PagedAuditLogResult

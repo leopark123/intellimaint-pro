@@ -24,7 +24,8 @@ public sealed class UserRepository : IUserRepository
     public async Task<UserDto?> GetByUsernameAsync(string username, CancellationToken ct)
     {
         const string sql = @"
-            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc
+            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc,
+                   COALESCE(must_change_password, 0) as must_change_password
             FROM user WHERE username = @Username COLLATE NOCASE";
 
         return await _db.QuerySingleAsync(sql, reader => new UserDto
@@ -35,14 +36,16 @@ public sealed class UserRepository : IUserRepository
             Role = reader.GetString(3),
             Enabled = reader.GetInt64(4) == 1,
             CreatedUtc = reader.GetInt64(5),
-            LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6)
+            LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6),
+            MustChangePassword = reader.GetInt64(7) == 1
         }, new { Username = username }, ct);
     }
 
     public async Task<UserDto?> GetByIdAsync(string userId, CancellationToken ct)
     {
         const string sql = @"
-            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc
+            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc,
+                   COALESCE(must_change_password, 0) as must_change_password
             FROM user WHERE user_id = @UserId";
 
         return await _db.QuerySingleAsync(sql, reader => new UserDto
@@ -53,7 +56,8 @@ public sealed class UserRepository : IUserRepository
             Role = reader.GetString(3),
             Enabled = reader.GetInt64(4) == 1,
             CreatedUtc = reader.GetInt64(5),
-            LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6)
+            LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6),
+            MustChangePassword = reader.GetInt64(7) == 1
         }, new { UserId = userId }, ct);
     }
 
@@ -61,7 +65,7 @@ public sealed class UserRepository : IUserRepository
     {
         const string sql = @"
             SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc, password_hash,
-                   failed_login_count, lockout_until_utc
+                   failed_login_count, lockout_until_utc, COALESCE(must_change_password, 0) as must_change_password
             FROM user WHERE username = @Username COLLATE NOCASE AND enabled = 1";
 
         var result = await _db.QueryAsync(sql, reader => new
@@ -74,7 +78,8 @@ public sealed class UserRepository : IUserRepository
                 Role = reader.GetString(3),
                 Enabled = reader.GetInt64(4) == 1,
                 CreatedUtc = reader.GetInt64(5),
-                LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6)
+                LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6),
+                MustChangePassword = reader.GetInt64(10) == 1
             },
             PasswordHash = reader.GetString(7),
             FailedLoginCount = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
@@ -300,13 +305,29 @@ public sealed class UserRepository : IUserRepository
         if (result.Count == 0)
             return false;
 
-        var currentHash = HashPassword(currentPassword);
-        if (result[0] != currentHash)
+        var storedHash = result[0];
+
+        // 使用 BCrypt.Verify 验证密码（不能用 HashPassword 比较，因为每次生成的 salt 不同）
+        bool passwordValid;
+        try
+        {
+            passwordValid = BCrypt.Net.BCrypt.Verify(currentPassword, storedHash);
+        }
+        catch
+        {
+            // 兼容旧的 SHA256 格式
+            passwordValid = VerifyLegacyPassword(currentPassword, storedHash);
+        }
+
+        if (!passwordValid)
             return false;
 
-        // 更新密码
+        // 更新密码（始终使用 BCrypt）并清除强制修改密码标志
         var newHash = HashPassword(newPassword);
-        const string updateSql = "UPDATE user SET password_hash = @PasswordHash WHERE user_id = @UserId";
+        const string updateSql = @"
+            UPDATE user
+            SET password_hash = @PasswordHash, must_change_password = 0
+            WHERE user_id = @UserId";
         var affected = await _db.ExecuteNonQueryAsync(updateSql, new { PasswordHash = newHash, UserId = userId }, ct);
 
         return affected > 0;
@@ -315,7 +336,8 @@ public sealed class UserRepository : IUserRepository
     public async Task<bool> ResetPasswordAsync(string userId, string newPassword, CancellationToken ct)
     {
         var newHash = HashPassword(newPassword);
-        const string sql = "UPDATE user SET password_hash = @PasswordHash WHERE user_id = @UserId";
+        // Set must_change_password flag when admin resets password
+        const string sql = "UPDATE user SET password_hash = @PasswordHash, must_change_password = 1 WHERE user_id = @UserId";
         var affected = await _db.ExecuteNonQueryAsync(sql, new { PasswordHash = newHash, UserId = userId }, ct);
 
         return affected > 0;
@@ -340,7 +362,8 @@ public sealed class UserRepository : IUserRepository
     public async Task<IReadOnlyList<UserDto>> ListAsync(CancellationToken ct)
     {
         const string sql = @"
-            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc
+            SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc,
+                   COALESCE(must_change_password, 0) as must_change_password
             FROM user ORDER BY created_utc DESC";
 
         var list = await _db.QueryAsync(sql, reader => new UserDto
@@ -351,7 +374,8 @@ public sealed class UserRepository : IUserRepository
             Role = reader.GetString(3),
             Enabled = reader.GetInt64(4) == 1,
             CreatedUtc = reader.GetInt64(5),
-            LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6)
+            LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6),
+            MustChangePassword = reader.GetInt64(7) == 1
         }, null, ct);
 
         return list;
@@ -384,9 +408,9 @@ public sealed class UserRepository : IUserRepository
     {
         const string sql = @"
             SELECT user_id, username, display_name, role, enabled, created_utc, last_login_utc,
-                   refresh_token_expires_utc
-            FROM user 
-            WHERE refresh_token = @RefreshToken 
+                   refresh_token_expires_utc, COALESCE(must_change_password, 0) as must_change_password
+            FROM user
+            WHERE refresh_token = @RefreshToken
               AND enabled = 1";
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -407,7 +431,8 @@ public sealed class UserRepository : IUserRepository
                 Role = reader.GetString(3),
                 Enabled = reader.GetInt64(4) == 1,
                 CreatedUtc = reader.GetInt64(5),
-                LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6)
+                LastLoginUtc = reader.IsDBNull(6) ? null : reader.GetInt64(6),
+                MustChangePassword = reader.GetInt64(8) == 1
             };
         }, new { RefreshToken = refreshToken }, ct);
 

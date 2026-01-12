@@ -1,13 +1,18 @@
+using IntelliMaint.Application.Services;
 using IntelliMaint.Core.Abstractions;
 using IntelliMaint.Core.Contracts;
+using IntelliMaint.Host.Api.Services;
+using IntelliMaint.Host.Api.Validators;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Serilog;
 using System.Security.Claims;
 
 namespace IntelliMaint.Host.Api.Endpoints;
 
+/// <summary>
+/// P1: 用户管理端点 - 业务逻辑已提取到 IUserService
+/// </summary>
 public static class UserEndpoints
 {
     public static void MapUserEndpoints(this IEndpointRouteBuilder app)
@@ -30,226 +35,142 @@ public static class UserEndpoints
     }
 
     private static async Task<IResult> ListUsersAsync(
-        [FromServices] IUserRepository userRepo,
+        [FromServices] IUserService userService,
         CancellationToken ct)
     {
-        var users = await userRepo.ListAsync(ct);
+        var users = await userService.ListAsync(ct);
         return Results.Ok(new { success = true, data = users });
     }
 
     private static async Task<IResult> GetUserAsync(
         string userId,
-        [FromServices] IUserRepository userRepo,
+        [FromServices] IUserService userService,
         CancellationToken ct)
     {
-        var user = await userRepo.GetByIdAsync(userId, ct);
-        if (user == null)
-        {
-            return Results.NotFound(new { success = false, error = "用户不存在" });
-        }
-        return Results.Ok(new { success = true, data = user });
+        var result = await userService.GetByIdAsync(userId, ct);
+        return ToResult(result);
     }
 
     private static async Task<IResult> CreateUserAsync(
         [FromBody] CreateUserRequest request,
         HttpContext httpContext,
-        [FromServices] IUserRepository userRepo,
-        [FromServices] IAuditLogRepository auditRepo,
+        [FromServices] IUserService userService,
+        [FromServices] AuditService auditService,
         CancellationToken ct)
     {
-        // 验证输入
-        if (string.IsNullOrWhiteSpace(request.Username))
+        // 输入验证
+        var usernameValidation = InputValidator.ValidateUsername(request.Username);
+        if (!usernameValidation.IsValid)
         {
-            return Results.BadRequest(new { success = false, error = "用户名不能为空" });
-        }
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
-        {
-            return Results.BadRequest(new { success = false, error = "密码长度至少6位" });
-        }
-        if (!UserRoles.IsValid(request.Role))
-        {
-            return Results.BadRequest(new { success = false, error = $"无效角色，可选值: {string.Join(", ", UserRoles.All)}" });
+            return Results.BadRequest(new { success = false, error = usernameValidation.Error });
         }
 
-        // 检查用户名是否已存在
-        var existing = await userRepo.GetByUsernameAsync(request.Username, ct);
-        if (existing != null)
+        var passwordValidation = InputValidator.ValidatePassword(request.Password);
+        if (!passwordValidation.IsValid)
         {
-            return Results.Conflict(new { success = false, error = "用户名已存在" });
+            return Results.BadRequest(new { success = false, error = passwordValidation.Error });
         }
 
-        var user = await userRepo.CreateAsync(request.Username, request.Password, request.Role, request.DisplayName, ct);
-        if (user == null)
+        var displayNameValidation = InputValidator.ValidateOptionalDisplayName(request.DisplayName, "显示名");
+        if (!displayNameValidation.IsValid)
         {
-            return Results.Problem("创建用户失败");
+            return Results.BadRequest(new { success = false, error = displayNameValidation.Error });
         }
 
-        Log.Information("User created: {Username} by {Operator}", user.Username, httpContext.User.Identity?.Name);
+        // 调用服务
+        var result = await userService.CreateAsync(request.Username, request.Password, request.Role, request.DisplayName, ct);
 
         // 审计日志
-        var operatorId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "system";
-        var operatorName = httpContext.User.FindFirst(ClaimTypes.Name)?.Value ?? "system";
-        await auditRepo.CreateAsync(new AuditLogEntry
+        if (result.Success)
         {
-            Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            UserId = operatorId,
-            UserName = operatorName,
-            Action = "CreateUser",
-            ResourceType = "User",
-            ResourceId = user.UserId,
-            Details = $"创建用户: {user.Username}, 角色: {user.Role}"
-        }, ct);
+            await auditService.LogAsync("CreateUser", "User", result.User!.UserId,
+                $"创建用户: {result.User.Username}, 角色: {result.User.Role}", ct);
+            return Results.Created($"/api/users/{result.User.UserId}", new { success = true, data = result.User });
+        }
 
-        return Results.Created($"/api/users/{user.UserId}", new { success = true, data = user });
+        return ToResult(result);
     }
 
     private static async Task<IResult> UpdateUserAsync(
         string userId,
         [FromBody] UpdateUserRequest request,
-        HttpContext httpContext,
-        [FromServices] IUserRepository userRepo,
-        [FromServices] IAuditLogRepository auditRepo,
+        [FromServices] IUserService userService,
+        [FromServices] AuditService auditService,
         CancellationToken ct)
     {
-        var existing = await userRepo.GetByIdAsync(userId, ct);
-        if (existing == null)
+        var result = await userService.UpdateAsync(userId, request.DisplayName, request.Role, request.Enabled, ct);
+
+        if (result.Success)
         {
-            return Results.NotFound(new { success = false, error = "用户不存在" });
+            var changes = new List<string>();
+            if (request.DisplayName != null) changes.Add($"显示名: {request.DisplayName}");
+            if (request.Role != null) changes.Add($"角色: {request.Role}");
+            if (request.Enabled.HasValue) changes.Add($"启用: {request.Enabled}");
+
+            await auditService.LogAsync("UpdateUser", "User", userId,
+                $"修改用户, 变更: {string.Join(", ", changes)}", ct);
         }
 
-        // 验证角色
-        if (request.Role != null && !UserRoles.IsValid(request.Role))
-        {
-            return Results.BadRequest(new { success = false, error = $"无效角色，可选值: {string.Join(", ", UserRoles.All)}" });
-        }
-
-        var user = await userRepo.UpdateAsync(userId, request.DisplayName, request.Role, request.Enabled, ct);
-
-        Log.Information("User updated: {UserId} by {Operator}", userId, httpContext.User.Identity?.Name);
-
-        // 审计日志
-        var operatorId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "system";
-        var operatorName = httpContext.User.FindFirst(ClaimTypes.Name)?.Value ?? "system";
-        
-        var changes = new List<string>();
-        if (request.DisplayName != null) changes.Add($"显示名: {request.DisplayName}");
-        if (request.Role != null) changes.Add($"角色: {request.Role}");
-        if (request.Enabled.HasValue) changes.Add($"启用: {request.Enabled}");
-
-        await auditRepo.CreateAsync(new AuditLogEntry
-        {
-            Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            UserId = operatorId,
-            UserName = operatorName,
-            Action = "UpdateUser",
-            ResourceType = "User",
-            ResourceId = userId,
-            Details = $"修改用户: {existing.Username}, 变更: {string.Join(", ", changes)}"
-        }, ct);
-
-        return Results.Ok(new { success = true, data = user });
+        return ToResult(result);
     }
 
     private static async Task<IResult> DisableUserAsync(
         string userId,
         HttpContext httpContext,
-        [FromServices] IUserRepository userRepo,
-        [FromServices] IAuditLogRepository auditRepo,
+        [FromServices] IUserService userService,
+        [FromServices] AuditService auditService,
+        [FromServices] TokenBlacklistService blacklistService,
         CancellationToken ct)
     {
-        var currentUserId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        
-        // 不能禁用自己
-        if (userId == currentUserId)
+        var operatorId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        var result = await userService.DisableAsync(userId, operatorId, ct);
+
+        if (result.Success)
         {
-            return Results.BadRequest(new { success = false, error = "不能禁用自己" });
+            // 将用户添加到黑名单，立即使其所有 Token 失效
+            blacklistService.BlacklistUser(userId, "User disabled by admin");
+
+            await auditService.LogAsync("DisableUser", "User", userId, "禁用用户", ct);
+            return Results.Ok(new { success = true, message = "用户已禁用" });
         }
 
-        var existing = await userRepo.GetByIdAsync(userId, ct);
-        if (existing == null)
-        {
-            return Results.NotFound(new { success = false, error = "用户不存在" });
-        }
-
-        var success = await userRepo.DisableAsync(userId, ct);
-        if (!success)
-        {
-            return Results.Problem("禁用用户失败");
-        }
-
-        Log.Information("User disabled: {UserId} by {Operator}", userId, httpContext.User.Identity?.Name);
-
-        // 审计日志
-        var operatorId = currentUserId ?? "system";
-        var operatorName = httpContext.User.FindFirst(ClaimTypes.Name)?.Value ?? "system";
-        await auditRepo.CreateAsync(new AuditLogEntry
-        {
-            Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            UserId = operatorId,
-            UserName = operatorName,
-            Action = "DisableUser",
-            ResourceType = "User",
-            ResourceId = userId,
-            Details = $"禁用用户: {existing.Username}"
-        }, ct);
-
-        return Results.Ok(new { success = true, message = "用户已禁用" });
+        return ToResult(result);
     }
 
     private static async Task<IResult> ResetPasswordAsync(
         string userId,
         [FromBody] ResetPasswordRequest request,
-        HttpContext httpContext,
-        [FromServices] IUserRepository userRepo,
-        [FromServices] IAuditLogRepository auditRepo,
+        [FromServices] IUserService userService,
+        [FromServices] AuditService auditService,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6)
+        // 输入验证
+        var passwordValidation = InputValidator.ValidatePassword(request.NewPassword);
+        if (!passwordValidation.IsValid)
         {
-            return Results.BadRequest(new { success = false, error = "新密码长度至少6位" });
+            return Results.BadRequest(new { success = false, error = passwordValidation.Error });
         }
 
-        var existing = await userRepo.GetByIdAsync(userId, ct);
-        if (existing == null)
+        var result = await userService.ResetPasswordAsync(userId, request.NewPassword, ct);
+
+        if (result.Success)
         {
-            return Results.NotFound(new { success = false, error = "用户不存在" });
+            await auditService.LogAsync("ResetPassword", "User", userId, "重置用户密码", ct);
+            return Results.Ok(new { success = true, message = "密码已重置" });
         }
 
-        var success = await userRepo.ResetPasswordAsync(userId, request.NewPassword, ct);
-        if (!success)
-        {
-            return Results.Problem("重置密码失败");
-        }
-
-        Log.Information("Password reset for user: {UserId} by {Operator}", userId, httpContext.User.Identity?.Name);
-
-        // 审计日志
-        var operatorId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "system";
-        var operatorName = httpContext.User.FindFirst(ClaimTypes.Name)?.Value ?? "system";
-        await auditRepo.CreateAsync(new AuditLogEntry
-        {
-            Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            UserId = operatorId,
-            UserName = operatorName,
-            Action = "ResetPassword",
-            ResourceType = "User",
-            ResourceId = userId,
-            Details = $"重置用户密码: {existing.Username}"
-        }, ct);
-
-        return Results.Ok(new { success = true, message = "密码已重置" });
+        return ToResult(result);
     }
 
     private static async Task<IResult> ChangePasswordAsync(
         [FromBody] ChangePasswordRequest request,
         HttpContext httpContext,
-        [FromServices] IUserRepository userRepo,
-        [FromServices] IAuditLogRepository auditRepo,
+        [FromServices] IUserService userService,
+        [FromServices] AuditService auditService,
         CancellationToken ct)
     {
         var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var userName = httpContext.User.FindFirst(ClaimTypes.Name)?.Value ?? "unknown";
-
         if (string.IsNullOrEmpty(userId))
         {
             return Results.Unauthorized();
@@ -259,37 +180,27 @@ public static class UserEndpoints
         {
             return Results.BadRequest(new { success = false, error = "当前密码不能为空" });
         }
-        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6)
+
+        var passwordValidation = InputValidator.ValidatePassword(request.NewPassword);
+        if (!passwordValidation.IsValid)
         {
-            return Results.BadRequest(new { success = false, error = "新密码长度至少6位" });
+            return Results.BadRequest(new { success = false, error = passwordValidation.Error });
         }
 
-        var success = await userRepo.UpdatePasswordAsync(userId, request.CurrentPassword, request.NewPassword, ct);
-        if (!success)
+        var result = await userService.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword, ct);
+
+        if (result.Success)
         {
-            return Results.BadRequest(new { success = false, error = "当前密码错误" });
+            await auditService.LogAsync("ChangePassword", "User", userId, "用户修改密码", ct);
+            return Results.Ok(new { success = true, message = "密码已修改" });
         }
 
-        Log.Information("Password changed for user: {Username}", userName);
-
-        // 审计日志
-        await auditRepo.CreateAsync(new AuditLogEntry
-        {
-            Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            UserId = userId,
-            UserName = userName,
-            Action = "ChangePassword",
-            ResourceType = "User",
-            ResourceId = userId,
-            Details = "用户修改密码"
-        }, ct);
-
-        return Results.Ok(new { success = true, message = "密码已修改" });
+        return ToResult(result);
     }
 
     private static async Task<IResult> GetCurrentUserAsync(
         HttpContext httpContext,
-        [FromServices] IUserRepository userRepo,
+        [FromServices] IUserService userService,
         CancellationToken ct)
     {
         var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -298,12 +209,26 @@ public static class UserEndpoints
             return Results.Unauthorized();
         }
 
-        var user = await userRepo.GetByIdAsync(userId, ct);
-        if (user == null)
+        var result = await userService.GetByIdAsync(userId, ct);
+        return ToResult(result);
+    }
+
+    /// <summary>
+    /// 将 UserResult 转换为 IResult
+    /// </summary>
+    private static IResult ToResult(UserResult result)
+    {
+        if (result.Success)
         {
-            return Results.NotFound(new { success = false, error = "用户不存在" });
+            return Results.Ok(new { success = true, data = result.User });
         }
 
-        return Results.Ok(new { success = true, data = user });
+        return result.StatusCode switch
+        {
+            404 => Results.NotFound(new { success = false, error = result.Error }),
+            409 => Results.Conflict(new { success = false, error = result.Error }),
+            500 => Results.Problem(result.Error),
+            _ => Results.BadRequest(new { success = false, error = result.Error })
+        };
     }
 }

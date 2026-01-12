@@ -84,7 +84,7 @@ export function useErrorHandler() {
     message.error(customMessage || errorMessage)
     
     // 开发环境打印详细错误
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.error('API Error:', { error, code, message: errorMessage })
     }
     

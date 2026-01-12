@@ -285,6 +285,7 @@ public sealed class TelemetryRepository : ITelemetryRepository
     
     /// <summary>
     /// v48: 游标分页查询
+    /// v56.1: 无筛选条件时自动限制时间范围，避免全表扫描
     /// </summary>
     public async Task<(IReadOnlyList<TelemetryPoint> Data, bool HasMore)> QueryWithCursorAsync(
         string? deviceId,
@@ -308,6 +309,15 @@ public sealed class TelemetryRepository : ITelemetryRepository
 
         var p = new Dictionary<string, object>();
 
+        // v56.1: 无筛选条件时默认限制最近24小时，避免全表扫描
+        var hasFilter = !string.IsNullOrWhiteSpace(deviceId) || !string.IsNullOrWhiteSpace(tagId);
+        var effectiveStartTs = startTs;
+        if (!hasFilter && !startTs.HasValue)
+        {
+            effectiveStartTs = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeMilliseconds();
+            _logger.LogDebug("No filter specified, limiting to last 24 hours");
+        }
+
         if (!string.IsNullOrWhiteSpace(deviceId))
         {
             sql.Append(" AND device_id = @DeviceId");
@@ -320,10 +330,10 @@ public sealed class TelemetryRepository : ITelemetryRepository
             p["TagId"] = tagId;
         }
 
-        if (startTs.HasValue)
+        if (effectiveStartTs.HasValue)
         {
             sql.Append(" AND ts >= @StartTs");
-            p["StartTs"] = startTs.Value;
+            p["StartTs"] = effectiveStartTs.Value;
         }
 
         if (endTs.HasValue)

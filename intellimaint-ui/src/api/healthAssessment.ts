@@ -34,6 +34,45 @@ export interface TagBaseline {
   normalCV: number
 }
 
+// v60: 健康快照（用于历史趋势）
+export interface HealthSnapshot {
+  deviceId: string
+  timestamp: number
+  index: number
+  level: string
+  deviationScore: number
+  trendScore: number
+  stabilityScore: number
+  alarmScore: number
+}
+
+// v60: 健康历史数据
+export interface HealthHistory {
+  deviceId: string
+  startTs: number
+  endTs: number
+  count: number
+  snapshots: HealthSnapshot[]
+}
+
+// v60: 健康汇总统计
+export interface HealthSummary {
+  assessedDevices: number
+  avgHealthIndex: number
+  distribution: {
+    healthy: number
+    attention: number
+    warning: number
+    critical: number
+  }
+  devices: {
+    deviceId: string
+    index: number
+    level: string
+    timestamp: number
+  }[]
+}
+
 interface ApiResponse<T> {
   success: boolean
   data: T
@@ -97,4 +136,26 @@ export async function deleteBaseline(
  */
 export async function listBaselines(): Promise<ApiResponse<DeviceBaseline[]>> {
   return apiClient.get('/health-assessment/baselines')
+}
+
+/**
+ * v60: 获取设备健康历史趋势
+ */
+export async function getDeviceHealthHistory(
+  deviceId: string,
+  startTs?: number,
+  endTs?: number
+): Promise<ApiResponse<HealthHistory>> {
+  const params = new URLSearchParams()
+  if (startTs) params.append('startTs', startTs.toString())
+  if (endTs) params.append('endTs', endTs.toString())
+  const query = params.toString() ? `?${params.toString()}` : ''
+  return apiClient.get(`/health-assessment/devices/${deviceId}/history${query}`)
+}
+
+/**
+ * v60: 获取健康汇总统计
+ */
+export async function getHealthSummary(): Promise<ApiResponse<HealthSummary>> {
+  return apiClient.get('/health-assessment/summary')
 }

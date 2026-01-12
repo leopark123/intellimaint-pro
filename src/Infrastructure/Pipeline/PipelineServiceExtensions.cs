@@ -52,19 +52,82 @@ public static class PipelineServiceExtensions
         {
             var dispatcher = sp.GetRequiredService<TelemetryDispatcher>();
             var options = sp.GetRequiredService<IOptions<ChannelCapacityOptions>>();
-            
+
             // 创建告警评估 Channel
             var (_, reader) = dispatcher.CreateTargetChannel(options.Value.DbWriterCapacity / 2, "AlarmEvaluator");
-            
+
             return new AlarmEvaluatorService(
                 reader,
                 sp.GetRequiredService<IAlarmRuleRepository>(),
                 sp.GetRequiredService<IAlarmRepository>(),
-                sp.GetRequiredService<IDbExecutor>(),
-                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AlarmEvaluatorService>>());
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AlarmEvaluatorService>>(),
+                sp.GetService<AlarmAggregationService>());  // v59: 可选的聚合服务
         });
         services.AddHostedService(sp => sp.GetRequiredService<AlarmEvaluatorService>());
-        
+
+        // v56: 滑动窗口数据结构（变化率告警用）
+        services.AddSingleton<RocSlidingWindow>();
+
+        // v56: 最后数据追踪器（离线检测用）
+        services.AddSingleton(sp =>
+        {
+            var dispatcher = sp.GetRequiredService<TelemetryDispatcher>();
+            var options = sp.GetRequiredService<IOptions<ChannelCapacityOptions>>();
+
+            // 创建追踪器 Channel
+            var (_, reader) = dispatcher.CreateTargetChannel(options.Value.DbWriterCapacity / 4, "LastDataTracker");
+
+            return new LastDataTracker(
+                reader,
+                sp.GetService<IDbExecutor>(),  // v56.2: 可选，TimescaleDB 模式下为 null
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LastDataTracker>>());
+        });
+        services.AddHostedService(sp => sp.GetRequiredService<LastDataTracker>());
+
+        // v56: 离线检测服务（定时器驱动，不需要 Channel）
+        services.AddHostedService<OfflineDetectorService>();
+
+        // v56: 变化率告警评估服务
+        services.AddSingleton(sp =>
+        {
+            var dispatcher = sp.GetRequiredService<TelemetryDispatcher>();
+            var options = sp.GetRequiredService<IOptions<ChannelCapacityOptions>>();
+
+            // 创建变化率评估 Channel
+            var (_, reader) = dispatcher.CreateTargetChannel(options.Value.DbWriterCapacity / 4, "RocEvaluator");
+
+            return new RocEvaluatorService(
+                reader,
+                sp.GetRequiredService<IAlarmRuleRepository>(),
+                sp.GetRequiredService<IAlarmRepository>(),
+                sp.GetRequiredService<RocSlidingWindow>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RocEvaluatorService>>(),
+                sp.GetService<AlarmAggregationService>());  // v59: 可选的聚合服务
+        });
+        services.AddHostedService(sp => sp.GetRequiredService<RocEvaluatorService>());
+
+        // v58: 波动告警评估服务
+        services.AddSingleton(sp =>
+        {
+            var dispatcher = sp.GetRequiredService<TelemetryDispatcher>();
+            var options = sp.GetRequiredService<IOptions<ChannelCapacityOptions>>();
+
+            // 创建波动评估 Channel
+            var (_, reader) = dispatcher.CreateTargetChannel(options.Value.DbWriterCapacity / 4, "VolatilityEvaluator");
+
+            return new VolatilityEvaluatorService(
+                reader,
+                sp.GetRequiredService<IAlarmRuleRepository>(),
+                sp.GetRequiredService<IAlarmRepository>(),
+                sp.GetRequiredService<RocSlidingWindow>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<VolatilityEvaluatorService>>(),
+                sp.GetService<AlarmAggregationService>());  // v59: 可选的聚合服务
+        });
+        services.AddHostedService(sp => sp.GetRequiredService<VolatilityEvaluatorService>());
+
+        // v59: 告警聚合服务
+        services.AddSingleton<AlarmAggregationService>();
+
         return services;
     }
 }

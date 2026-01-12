@@ -9,6 +9,8 @@ public sealed class UserDto
     public bool Enabled { get; init; } = true;
     public long CreatedUtc { get; init; }
     public long? LastLoginUtc { get; init; }
+    /// <summary>是否必须修改密码（首次登录或管理员重置后）</summary>
+    public bool MustChangePassword { get; init; }
 }
 
 public sealed class LoginRequest
@@ -25,6 +27,8 @@ public sealed class LoginResponse
     public required string Role { get; init; }
     public required long ExpiresAt { get; init; }
     public required long RefreshExpiresAt { get; init; }
+    /// <summary>是否必须修改密码（首次登录或管理员重置后）</summary>
+    public bool MustChangePassword { get; init; }
 }
 
 public sealed class RefreshTokenRequest

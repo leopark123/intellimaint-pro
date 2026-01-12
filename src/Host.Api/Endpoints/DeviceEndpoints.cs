@@ -2,6 +2,7 @@ using IntelliMaint.Core.Abstractions;
 using IntelliMaint.Core.Contracts;
 using IntelliMaint.Host.Api.Models;
 using IntelliMaint.Host.Api.Services;
+using IntelliMaint.Host.Api.Validators;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
@@ -62,8 +63,10 @@ public static class DeviceEndpoints
         [FromRoute] string deviceId,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(deviceId))
-            return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = "deviceId 不能为空" });
+        // P1: 使用 InputValidator 验证
+        var idValidation = InputValidator.ValidateIdentifier(deviceId, "deviceId");
+        if (!idValidation.IsValid)
+            return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = idValidation.Error });
 
         // v48: 使用缓存
         var device = await cache.GetOrCreateAsync(
@@ -89,8 +92,14 @@ public static class DeviceEndpoints
         if (request is null)
             return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = "请求体不能为空" });
 
-        if (string.IsNullOrWhiteSpace(request.DeviceId))
-            return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = "DeviceId 必填" });
+        // P1: 使用 InputValidator 进行输入验证
+        var idValidation = InputValidator.ValidateIdentifier(request.DeviceId, "DeviceId");
+        if (!idValidation.IsValid)
+            return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = idValidation.Error });
+
+        var nameValidation = InputValidator.ValidateOptionalDisplayName(request.Name, "设备名称");
+        if (!nameValidation.IsValid)
+            return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = nameValidation.Error });
 
         var existing = await repo.GetAsync(request.DeviceId, ct);
         if (existing is not null)
@@ -141,11 +150,17 @@ public static class DeviceEndpoints
         [FromBody] UpdateDeviceRequest request,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(deviceId))
-            return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = "deviceId 不能为空" });
+        // P1: 使用 InputValidator 验证
+        var idValidation = InputValidator.ValidateIdentifier(deviceId, "deviceId");
+        if (!idValidation.IsValid)
+            return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = idValidation.Error });
 
         if (request is null)
             return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = "请求体不能为空" });
+
+        var nameValidation = InputValidator.ValidateOptionalDisplayName(request.Name, "设备名称");
+        if (!nameValidation.IsValid)
+            return Results.BadRequest(new ApiResponse<DeviceDto> { Success = false, Error = nameValidation.Error });
 
         var existing = await repo.GetAsync(deviceId, ct);
         if (existing is null)
@@ -193,8 +208,10 @@ public static class DeviceEndpoints
         [FromRoute] string deviceId,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(deviceId))
-            return Results.BadRequest(new ApiResponse<object> { Success = false, Error = "deviceId 不能为空" });
+        // P1: 使用 InputValidator 验证
+        var idValidation = InputValidator.ValidateIdentifier(deviceId, "deviceId");
+        if (!idValidation.IsValid)
+            return Results.BadRequest(new ApiResponse<object> { Success = false, Error = idValidation.Error });
 
         var existing = await repo.GetAsync(deviceId, ct);
         if (existing is null)

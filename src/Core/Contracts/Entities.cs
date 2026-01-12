@@ -168,12 +168,81 @@ public sealed record AlarmRule
     public string? Description { get; init; }
     public required string TagId { get; init; }
     public string? DeviceId { get; init; }
-    public required string ConditionType { get; init; }  // gt, gte, lt, lte, eq, ne
-    public required double Threshold { get; init; }
-    public int DurationMs { get; init; }                 // 0=立即触发
+    public required string ConditionType { get; init; }  // gt, gte, lt, lte, eq, ne, offline, roc_percent, roc_absolute
+    public required double Threshold { get; init; }      // 阈值告警=数值阈值, 离线=超时秒数, 变化率=变化阈值
+    public int DurationMs { get; init; }                 // 0=立即触发（仅阈值告警使用）
     public int Severity { get; init; } = 3;              // 1-5
     public string? MessageTemplate { get; init; }
     public bool Enabled { get; init; } = true;
     public long CreatedUtc { get; init; }
     public long UpdatedUtc { get; init; }
+
+    // === v56 新增字段 ===
+    /// <summary>
+    /// 变化率告警的时间窗口（毫秒），仅 roc_percent 和 roc_absolute 类型使用
+    /// </summary>
+    public int RocWindowMs { get; init; }
+
+    /// <summary>
+    /// 规则类型分类: threshold | offline | roc
+    /// 默认为 threshold 以保持向后兼容
+    /// </summary>
+    public string RuleType { get; init; } = "threshold";
+}
+
+/// <summary>
+/// v59: 告警聚合组
+/// 将同设备同规则触发的多个告警合并为一个聚合组
+/// </summary>
+public sealed record AlarmGroup
+{
+    /// <summary>聚合组ID</summary>
+    public required string GroupId { get; init; }
+
+    /// <summary>设备ID</summary>
+    public required string DeviceId { get; init; }
+
+    /// <summary>标签ID（取第一条告警的标签）</summary>
+    public string? TagId { get; init; }
+
+    /// <summary>规则ID（从 alarm.Code 提取）</summary>
+    public required string RuleId { get; init; }
+
+    /// <summary>最高严重级别</summary>
+    public int Severity { get; init; }
+
+    /// <summary>告警代码</summary>
+    public string? Code { get; init; }
+
+    /// <summary>最后一条告警消息</summary>
+    public string? Message { get; init; }
+
+    /// <summary>聚合的告警数量</summary>
+    public int AlarmCount { get; init; }
+
+    /// <summary>第一条告警时间（毫秒时间戳）</summary>
+    public long FirstOccurredUtc { get; init; }
+
+    /// <summary>最后一条告警时间（毫秒时间戳）</summary>
+    public long LastOccurredUtc { get; init; }
+
+    /// <summary>聚合状态</summary>
+    public AlarmStatus AggregateStatus { get; init; } = AlarmStatus.Open;
+
+    public long CreatedUtc { get; init; }
+    public long UpdatedUtc { get; init; }
+}
+
+/// <summary>
+/// v59: 告警聚合组查询
+/// </summary>
+public sealed record AlarmGroupQuery
+{
+    public string? DeviceId { get; init; }
+    public AlarmStatus? Status { get; init; }
+    public int? MinSeverity { get; init; }
+    public long? StartTs { get; init; }
+    public long? EndTs { get; init; }
+    public int Limit { get; init; } = 50;
+    public PageToken? After { get; init; }
 }

@@ -1,0 +1,35 @@
+# Build outputs
+**/bin/
+**/obj/
+**/publish/
+
+# Data and database files
+**/data/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# IDE
+.vs/
+.vscode/
+*.user
+
+# Node modules
+**/node_modules/
+**/dist/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+!docker/*.md
+
+# Test results
+**/TestResults/
+
+# Temp files
+*.tmp
+*.log

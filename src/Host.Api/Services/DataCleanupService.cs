@@ -1,4 +1,4 @@
-using IntelliMaint.Core.Abstractions;
+﻿using IntelliMaint.Core.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -6,8 +6,9 @@ using Microsoft.Extensions.Options;
 namespace IntelliMaint.Host.Api.Services;
 
 /// <summary>
-/// v56: 数据清理后台服务
+/// v56.2: 数据清理后台服务 - 数据库无关实现
 /// 定期删除旧的遥测数据，防止数据库无限增长
+/// 支持 SQLite 和 TimescaleDB
 /// </summary>
 public sealed class DataCleanupService : BackgroundService
 {
@@ -34,7 +35,6 @@ public sealed class DataCleanupService : BackgroundService
             _options.AuditLogRetentionDays,
             _options.CleanupIntervalHours);
 
-        // 等待一段时间后再开始清理，让系统完全启动
         await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -71,66 +71,68 @@ public sealed class DataCleanupService : BackgroundService
         var totalDeleted = 0;
 
         using var scope = _scopeFactory.CreateScope();
-        var executor = scope.ServiceProvider.GetRequiredService<IntelliMaint.Infrastructure.Sqlite.IDbExecutor>();
 
-        // 1. 清理原始遥测数据（仅清理已聚合的数据）
+        var timeSeriesDb = scope.ServiceProvider.GetRequiredService<ITimeSeriesDb>();
+        var isSqlite = timeSeriesDb.DbType == TimeSeriesDbType.Sqlite;
+
+        // 1. 清理原始遥测数据
         if (_options.TelemetryRetentionDays > 0)
         {
             var telemetryRepo = scope.ServiceProvider.GetRequiredService<ITelemetryRepository>();
             var cutoffTs = DateTimeOffset.UtcNow.AddDays(-_options.TelemetryRetentionDays).ToUnixTimeMilliseconds();
-            
-            // 检查聚合进度，只删除已聚合的数据
-            var aggregatedTs = await executor.ExecuteScalarAsync<long>(
-                "SELECT last_processed_ts FROM aggregate_state WHERE table_name = 'telemetry_1m'",
-                null, ct);
-            
-            // 取较小值：只删除既过期又已聚合的数据
-            var safeCutoffTs = Math.Min(cutoffTs, aggregatedTs);
-            
+            var safeCutoffTs = cutoffTs;
+
+            if (isSqlite)
+            {
+                try
+                {
+                    var executor = scope.ServiceProvider.GetService<IntelliMaint.Infrastructure.Sqlite.IDbExecutor>();
+                    if (executor != null)
+                    {
+                        var aggregatedTs = await executor.ExecuteScalarAsync<long>(
+                            "SELECT COALESCE(last_processed_ts, 0) FROM aggregate_state WHERE table_name = 'telemetry_1m'",
+                            null, ct);
+                        if (aggregatedTs > 0) safeCutoffTs = Math.Min(cutoffTs, aggregatedTs);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get aggregate state");
+                }
+            }
+
             if (safeCutoffTs > 0)
             {
                 var deleted = await telemetryRepo.DeleteBeforeAsync(safeCutoffTs, ct);
                 totalDeleted += deleted;
-                _logger.LogInformation("Deleted {Count} telemetry records older than {Days} days (cutoff: {Cutoff})", 
-                    deleted, _options.TelemetryRetentionDays, safeCutoffTs);
+                _logger.LogInformation("Deleted {Count} telemetry records", deleted);
             }
         }
-        
-        // 2. 清理分钟级聚合数据（保留30天）
+
+        // 2-3. 清理聚合数据（仅 SQLite）
+        if (isSqlite)
         {
-            var cutoffTs = DateTimeOffset.UtcNow.AddDays(-_options.Telemetry1mRetentionDays).ToUnixTimeMilliseconds();
-            
-            // 检查小时级聚合进度
-            var aggregatedTs = await executor.ExecuteScalarAsync<long>(
-                "SELECT last_processed_ts FROM aggregate_state WHERE table_name = 'telemetry_1h'",
-                null, ct);
-            
-            var safeCutoffTs = Math.Min(cutoffTs, aggregatedTs);
-            
-            if (safeCutoffTs > 0)
+            try
             {
-                var deleted = await executor.ExecuteNonQueryAsync(
-                    "DELETE FROM telemetry_1m WHERE ts_bucket < @CutoffTs",
-                    new { CutoffTs = safeCutoffTs },
-                    ct);
-                totalDeleted += deleted;
-                _logger.LogInformation("Deleted {Count} minute-level aggregates older than {Days} days", 
-                    deleted, _options.Telemetry1mRetentionDays);
+                var executor = scope.ServiceProvider.GetService<IntelliMaint.Infrastructure.Sqlite.IDbExecutor>();
+                if (executor != null)
+                {
+                    var cutoffTs1m = DateTimeOffset.UtcNow.AddDays(-_options.Telemetry1mRetentionDays).ToUnixTimeMilliseconds();
+                    var deleted1m = await executor.ExecuteNonQueryAsync(
+                        "DELETE FROM telemetry_1m WHERE ts_bucket < @CutoffTs",
+                        new { CutoffTs = cutoffTs1m }, ct);
+                    totalDeleted += deleted1m;
+
+                    var cutoffTs1h = DateTimeOffset.UtcNow.AddDays(-_options.Telemetry1hRetentionDays).ToUnixTimeMilliseconds();
+                    var deleted1h = await executor.ExecuteNonQueryAsync(
+                        "DELETE FROM telemetry_1h WHERE ts_bucket < @CutoffTs",
+                        new { CutoffTs = cutoffTs1h }, ct);
+                    totalDeleted += deleted1h;
+                }
             }
-        }
-        
-        // 3. 清理小时级聚合数据（保留1年）
-        {
-            var cutoffTs = DateTimeOffset.UtcNow.AddDays(-_options.Telemetry1hRetentionDays).ToUnixTimeMilliseconds();
-            var deleted = await executor.ExecuteNonQueryAsync(
-                "DELETE FROM telemetry_1h WHERE ts_bucket < @CutoffTs",
-                new { CutoffTs = cutoffTs },
-                ct);
-            if (deleted > 0)
+            catch (Exception ex)
             {
-                totalDeleted += deleted;
-                _logger.LogInformation("Deleted {Count} hour-level aggregates older than {Days} days", 
-                    deleted, _options.Telemetry1hRetentionDays);
+                _logger.LogWarning(ex, "Failed to cleanup aggregate tables");
             }
         }
 
@@ -139,60 +141,49 @@ public sealed class DataCleanupService : BackgroundService
         {
             var alarmRepo = scope.ServiceProvider.GetRequiredService<IAlarmRepository>();
             var cutoffTs = DateTimeOffset.UtcNow.AddDays(-_options.AlarmRetentionDays).ToUnixTimeMilliseconds();
-            var deleted = await alarmRepo.DeleteBeforeAsync(cutoffTs, ct);
-            totalDeleted += deleted;
-            _logger.LogInformation("Deleted {Count} alarm records older than {Days} days", deleted, _options.AlarmRetentionDays);
+            totalDeleted += await alarmRepo.DeleteBeforeAsync(cutoffTs, ct);
         }
 
         // 5. 清理审计日志
         if (_options.AuditLogRetentionDays > 0)
         {
+            var auditRepo = scope.ServiceProvider.GetRequiredService<IAuditLogRepository>();
             var cutoffTs = DateTimeOffset.UtcNow.AddDays(-_options.AuditLogRetentionDays).ToUnixTimeMilliseconds();
-            var deleted = await executor.ExecuteNonQueryAsync(
-                "DELETE FROM audit_log WHERE ts < @CutoffTs",
-                new { CutoffTs = cutoffTs },
-                ct);
-            totalDeleted += deleted;
-            _logger.LogInformation("Deleted {Count} audit log records older than {Days} days", deleted, _options.AuditLogRetentionDays);
+            totalDeleted += await auditRepo.DeleteBeforeAsync(cutoffTs, ct);
         }
 
-        // 6. 执行 VACUUM 压缩数据库（可选，会锁表）
+        // 6. 数据库维护
         if (_options.VacuumAfterCleanup && totalDeleted > 10000)
         {
-            _logger.LogInformation("Running VACUUM to reclaim disk space...");
-            await executor.ExecuteNonQueryAsync("VACUUM", null, ct);
-            _logger.LogInformation("VACUUM completed");
+            try
+            {
+                await timeSeriesDb.PerformMaintenanceAsync(new MaintenanceOptions
+                {
+                    Vacuum = true,
+                    UpdateStatistics = true,
+                    CleanupExpiredData = false,
+                    CompressOldChunks = !isSqlite,
+                    CompressAfterDays = _options.TelemetryRetentionDays
+                }, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Database maintenance failed");
+            }
         }
 
         _logger.LogInformation("Data cleanup completed. Total deleted: {Count}", totalDeleted);
     }
 }
 
-/// <summary>
-/// 数据清理配置选项
-/// </summary>
 public sealed class DataCleanupOptions
 {
     public const string SectionName = "DataCleanup";
-
-    /// <summary>原始遥测数据保留天数（默认7天）</summary>
     public int TelemetryRetentionDays { get; set; } = 7;
-    
-    /// <summary>分钟级聚合数据保留天数（默认30天）</summary>
     public int Telemetry1mRetentionDays { get; set; } = 30;
-    
-    /// <summary>小时级聚合数据保留天数（默认365天）</summary>
     public int Telemetry1hRetentionDays { get; set; } = 365;
-
-    /// <summary>告警数据保留天数（默认30天）</summary>
     public int AlarmRetentionDays { get; set; } = 30;
-
-    /// <summary>审计日志保留天数（默认90天）</summary>
     public int AuditLogRetentionDays { get; set; } = 90;
-
-    /// <summary>清理间隔小时数（默认6小时）</summary>
     public int CleanupIntervalHours { get; set; } = 6;
-
-    /// <summary>清理后是否执行 VACUUM（默认 true）</summary>
     public bool VacuumAfterCleanup { get; set; } = true;
 }

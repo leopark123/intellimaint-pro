@@ -1,0 +1,50 @@
+# IntelliMaint API Dockerfile
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# Copy csproj files and restore
+COPY src/Core/*.csproj ./Core/
+COPY src/Application/*.csproj ./Application/
+COPY src/Infrastructure/Sqlite/*.csproj ./Infrastructure/Sqlite/
+COPY src/Infrastructure/TimescaleDb/*.csproj ./Infrastructure/TimescaleDb/
+COPY src/Infrastructure/Pipeline/*.csproj ./Infrastructure/Pipeline/
+COPY src/Infrastructure/Security/*.csproj ./Infrastructure/Security/
+COPY src/Host.Api/*.csproj ./Host.Api/
+
+WORKDIR /src/Host.Api
+RUN dotnet restore
+
+# Copy source and build
+WORKDIR /src
+COPY src/ ./
+WORKDIR /src/Host.Api
+RUN dotnet publish -c Release -o /app/publish
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
+
+# Create non-root user
+RUN adduser --disabled-password --gecos '' appuser
+
+# Copy published files
+COPY --from=build /app/publish .
+
+# Create data directory
+RUN mkdir -p /app/data && chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Environment variables
+ENV ASPNETCORE_URLS=http://+:5000
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV TZ=Asia/Shanghai
+
+EXPOSE 5000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1
+
+ENTRYPOINT ["dotnet", "IntelliMaint.Host.Api.dll"]

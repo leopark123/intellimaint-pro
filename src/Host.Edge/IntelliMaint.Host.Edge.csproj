@@ -18,7 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\IntelliMaint.Core.csproj" />
     <ProjectReference Include="..\Application\IntelliMaint.Application.csproj" />
-    <ProjectReference Include="..\Infrastructure\Sqlite\IntelliMaint.Infrastructure.Sqlite.csproj" />
+    <ProjectReference Include="..\Infrastructure\TimescaleDb\IntelliMaint.Infrastructure.TimescaleDb.csproj" />
     <ProjectReference Include="..\Infrastructure\Pipeline\IntelliMaint.Infrastructure.Pipeline.csproj" />
     <ProjectReference Include="..\Infrastructure\Protocols\LibPlcTag\IntelliMaint.Infrastructure.Protocols.LibPlcTag.csproj" />
     <ProjectReference Include="..\Infrastructure\Protocols\OpcUa\IntelliMaint.Infrastructure.Protocols.OpcUa.csproj" />

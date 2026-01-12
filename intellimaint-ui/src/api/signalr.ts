@@ -135,6 +135,25 @@ export class TelemetrySignalR {
     }
   }
 
+  /**
+   * 智能切换订阅：根据 deviceId 自动选择订阅全部或单设备
+   */
+  public async switchSubscription(deviceId?: string): Promise<void> {
+    if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
+      await this.connect()
+    }
+
+    // 先取消所有订阅
+    await this.unsubscribeAll()
+
+    // 建立新订阅
+    if (deviceId) {
+      await this.subscribeDevice(deviceId)
+    } else {
+      await this.subscribeAll()
+    }
+  }
+
   public onData(callback: DataCallback): () => void {
     this.dataCallbacks.push(callback)
     return () => {

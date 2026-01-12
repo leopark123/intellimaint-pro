@@ -45,7 +45,13 @@ public static class SqliteServiceExtensions
         
         // Batch 30: Alarm Rule Repository
         services.AddSingleton<IAlarmRuleRepository, AlarmRuleRepository>();
-        
+
+        // v59: Alarm Group Repository（告警聚合）
+        services.AddSingleton<IAlarmGroupRepository, AlarmGroupRepository>();
+
+        // v60: Device Health Snapshot Repository（设备健康快照）
+        services.AddSingleton<IDeviceHealthSnapshotRepository, DeviceHealthSnapshotRepository>();
+
         // Batch 31: Database Config Provider（供采集器使用）
         services.AddSingleton<IDbConfigProvider, DbConfigProvider>();
         
@@ -65,7 +71,28 @@ public static class SqliteServiceExtensions
         // v47: Cycle Analysis Repository（周期分析）
         services.AddSingleton<IWorkCycleRepository, WorkCycleRepository>();
         services.AddSingleton<ICycleDeviceBaselineRepository, CycleDeviceBaselineRepository>();
-        
+
+        // v56.2: Time Series Database Abstraction（数据库抽象层）
+        services.AddSingleton<ITimeSeriesDb, SqliteTimeSeriesDb>();
+
+        // v61: Tag Importance Repository（标签重要性配置）
+        services.AddSingleton<ITagImportanceRepository, TagImportanceRepository>();
+
+        // v62: Tag Correlation Repository（标签关联规则）
+        services.AddSingleton<ITagCorrelationRepository, TagCorrelationRepository>();
+
+        // v64: Motor Fault Prediction Repositories（电机故障预测）
+        services.AddSingleton<IMotorModelRepository, MotorModelRepository>();
+        services.AddSingleton<IMotorParameterMappingRepository, MotorParameterMappingRepository>();
+        services.AddSingleton<IOperationModeRepository, OperationModeRepository>();
+        services.AddSingleton<IBaselineProfileRepository, BaselineProfileRepository>();
+        services.AddSingleton<IMotorInstanceRepository, MotorInstanceRepository>();
+
+        // v65: Edge Config Repositories（Edge 配置管理）
+        services.AddSingleton<IEdgeConfigRepository, EdgeConfigRepository>();
+        services.AddSingleton<ITagProcessingConfigRepository, TagProcessingConfigRepository>();
+        services.AddSingleton<IEdgeStatusRepository, EdgeStatusRepository>();
+
         // Batch 32: Config Change Watcher（定期检测配置变更）
         services.AddHostedService<ConfigChangeWatcher>();
         

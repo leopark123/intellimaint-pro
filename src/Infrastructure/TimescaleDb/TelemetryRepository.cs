@@ -293,15 +293,7 @@ public sealed class TelemetryRepository : ITelemetryRepository
             SELECT
                 t.device_id,
                 t.tag_id,
-                CASE t.data_type
-                    WHEN 'Float32' THEN 10
-                    WHEN 'Float64' THEN 11
-                    WHEN 'Int32' THEN 6
-                    WHEN 'Int16' THEN 4
-                    WHEN 'Bool' THEN 1
-                    WHEN 'String' THEN 12
-                    ELSE 10
-                END as value_type,
+                t.data_type as value_type,
                 t.unit,
                 (SELECT MAX(ts) FROM telemetry tel
                  WHERE tel.device_id = t.device_id AND tel.tag_id = t.tag_id

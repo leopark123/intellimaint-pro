@@ -19,7 +19,14 @@ public sealed class CacheService
         public const string EnabledTagList = "tags:enabled";
         public const string Settings = "settings:all";
         public const string AlarmStats = "alarms:stats";
-        
+
+        // v56: 审计日志筛选项缓存
+        public const string AuditActions = "audit:actions";
+        public const string AuditResourceTypes = "audit:resourceTypes";
+
+        // v56: 告警规则缓存
+        public const string AlarmRuleList = "alarmrules:all";
+
         public static string DeviceById(string deviceId) => $"device:{deviceId}";
         public static string TagsByDevice(string deviceId) => $"tags:device:{deviceId}";
     }
@@ -98,6 +105,12 @@ public sealed class CacheService
         _cache.Remove(Keys.AlarmStats);
     }
 
+    /// <summary>使告警规则缓存失效</summary>
+    public void InvalidateAlarmRules()
+    {
+        _cache.Remove(Keys.AlarmRuleList);
+    }
+
     /// <summary>清除所有缓存</summary>
     public void Clear()
     {
@@ -107,5 +120,8 @@ public sealed class CacheService
         _cache.Remove(Keys.EnabledTagList);
         _cache.Remove(Keys.Settings);
         _cache.Remove(Keys.AlarmStats);
+        _cache.Remove(Keys.AlarmRuleList);
+        _cache.Remove(Keys.AuditActions);
+        _cache.Remove(Keys.AuditResourceTypes);
     }
 }

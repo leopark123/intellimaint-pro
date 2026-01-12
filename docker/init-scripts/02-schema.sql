@@ -175,10 +175,14 @@ COMMENT ON TABLE alarm_ack IS '告警确认记录表';
 CREATE TABLE alarm_group (
     group_id TEXT PRIMARY KEY,
     device_id TEXT NOT NULL,
+    tag_id TEXT,
     rule_id TEXT,
-    first_alarm_ts BIGINT NOT NULL,
-    last_alarm_ts BIGINT NOT NULL,
+    severity INTEGER NOT NULL DEFAULT 2,
+    code TEXT,
+    message TEXT,
     alarm_count INTEGER NOT NULL DEFAULT 1,
+    first_occurred_utc BIGINT NOT NULL,
+    last_occurred_utc BIGINT NOT NULL,
     aggregate_status INTEGER NOT NULL DEFAULT 0,
     acked_by TEXT,
     acked_utc BIGINT,
@@ -189,16 +193,20 @@ CREATE TABLE alarm_group (
 
 CREATE INDEX idx_alarm_group_device ON alarm_group (device_id, aggregate_status);
 CREATE INDEX idx_alarm_group_rule ON alarm_group (rule_id) WHERE aggregate_status <> 2;
+CREATE INDEX idx_alarm_group_severity ON alarm_group (severity, aggregate_status);
+CREATE INDEX idx_alarm_group_last_occurred ON alarm_group (last_occurred_utc DESC);
 
 COMMENT ON TABLE alarm_group IS '告警聚合组表';
 
 -- ==================== 告警分组映射表 ====================
 CREATE TABLE alarm_to_group (
     alarm_id TEXT PRIMARY KEY,
-    group_id TEXT NOT NULL REFERENCES alarm_group(group_id) ON DELETE CASCADE
+    group_id TEXT NOT NULL REFERENCES alarm_group(group_id) ON DELETE CASCADE,
+    added_utc BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_alarm_to_group_group ON alarm_to_group (group_id);
+CREATE INDEX idx_alarm_to_group_added ON alarm_to_group (group_id, added_utc DESC);
 
 -- ==================== 用户表 ====================
 CREATE TABLE "user" (
@@ -213,7 +221,8 @@ CREATE TABLE "user" (
     failed_login_count INTEGER NOT NULL DEFAULT 0,
     lockout_until_utc BIGINT,
     refresh_token TEXT,
-    refresh_token_expires_utc BIGINT
+    refresh_token_expires_utc BIGINT,
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE INDEX idx_user_username ON "user" (username);
@@ -221,15 +230,16 @@ CREATE INDEX idx_user_enabled ON "user" (enabled) WHERE enabled = TRUE;
 
 COMMENT ON TABLE "user" IS '用户账户表';
 
--- 插入默认管理员账户 (密码: admin123)
-INSERT INTO "user" (user_id, username, password_hash, role, enabled, created_utc)
+-- 插入默认管理员账户 (密码: admin123, 首次登录需修改密码)
+INSERT INTO "user" (user_id, username, password_hash, role, enabled, created_utc, must_change_password)
 VALUES (
     'admin0000000001',
     'admin',
     'JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=',
     'Admin',
     TRUE,
-    EXTRACT(EPOCH FROM NOW()) * 1000
+    EXTRACT(EPOCH FROM NOW()) * 1000,
+    TRUE
 );
 
 -- ==================== 审计日志表 ====================
@@ -293,6 +303,23 @@ CREATE INDEX idx_health_snapshot_device ON device_health_snapshot (device_id, ts
 
 COMMENT ON TABLE device_health_snapshot IS '设备健康快照历史表';
 
+-- ==================== 系统健康快照表 ====================
+CREATE TABLE health_snapshot (
+    ts_utc BIGINT PRIMARY KEY,
+    overall_state INTEGER NOT NULL,
+    database_state INTEGER NOT NULL,
+    queue_state INTEGER NOT NULL,
+    queue_depth BIGINT NOT NULL DEFAULT 0,
+    dropped_points BIGINT NOT NULL DEFAULT 0,
+    write_p95_ms DOUBLE PRECISION NOT NULL DEFAULT 0,
+    mqtt_connected BOOLEAN NOT NULL DEFAULT FALSE,
+    outbox_depth BIGINT NOT NULL DEFAULT 0,
+    memory_used_mb BIGINT NOT NULL DEFAULT 0,
+    collectors_json TEXT
+);
+
+COMMENT ON TABLE health_snapshot IS '系统健康快照表';
+
 -- ==================== 采集规则表 ====================
 CREATE TABLE collection_rule (
     rule_id TEXT PRIMARY KEY,
@@ -336,13 +363,23 @@ COMMENT ON TABLE collection_segment IS '采集数据片段表';
 CREATE TABLE work_cycle (
     id BIGSERIAL PRIMARY KEY,
     device_id TEXT NOT NULL,
+    segment_id BIGINT,
     start_time_utc BIGINT NOT NULL,
     end_time_utc BIGINT NOT NULL,
-    duration_ms BIGINT NOT NULL,
-    cycle_type TEXT,
+    duration_seconds DOUBLE PRECISION NOT NULL,
+    max_angle DOUBLE PRECISION NOT NULL DEFAULT 0,
+    motor1_peak_current DOUBLE PRECISION NOT NULL DEFAULT 0,
+    motor2_peak_current DOUBLE PRECISION NOT NULL DEFAULT 0,
+    motor1_avg_current DOUBLE PRECISION NOT NULL DEFAULT 0,
+    motor2_avg_current DOUBLE PRECISION NOT NULL DEFAULT 0,
+    motor1_energy DOUBLE PRECISION NOT NULL DEFAULT 0,
+    motor2_energy DOUBLE PRECISION NOT NULL DEFAULT 0,
+    motor_balance_ratio DOUBLE PRECISION NOT NULL DEFAULT 1,
+    baseline_deviation_percent DOUBLE PRECISION NOT NULL DEFAULT 0,
+    anomaly_score DOUBLE PRECISION NOT NULL DEFAULT 0,
     is_anomaly BOOLEAN NOT NULL DEFAULT FALSE,
-    anomaly_score DOUBLE PRECISION,
-    features JSONB,
+    anomaly_type TEXT,
+    details_json TEXT,
     created_utc BIGINT NOT NULL
 );
 
@@ -364,6 +401,19 @@ CREATE TABLE device_baseline (
 
 COMMENT ON TABLE device_baseline IS '设备周期基线表';
 
+-- ==================== 周期分析设备基线表 ====================
+CREATE TABLE cycle_device_baseline (
+    device_id TEXT NOT NULL,
+    baseline_type TEXT NOT NULL,
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    model_json TEXT,
+    stats_json TEXT,
+    updated_utc BIGINT NOT NULL,
+    PRIMARY KEY (device_id, baseline_type)
+);
+
+COMMENT ON TABLE cycle_device_baseline IS '周期分析设备基线表';
+
 -- ==================== 标签最后数据时间表 ====================
 CREATE TABLE tag_last_data (
     device_id TEXT NOT NULL,
@@ -382,6 +432,34 @@ CREATE TABLE aggregate_state (
 );
 
 COMMENT ON TABLE aggregate_state IS '聚合任务状态表';
+
+-- ==================== 标签重要性配置表 ====================
+CREATE TABLE tag_importance_config (
+    id SERIAL PRIMARY KEY,
+    pattern TEXT NOT NULL,
+    importance INTEGER NOT NULL DEFAULT 40,
+    description TEXT,
+    priority INTEGER NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_utc BIGINT NOT NULL,
+    updated_utc BIGINT NOT NULL
+);
+
+CREATE INDEX idx_tag_importance_enabled ON tag_importance_config (enabled) WHERE enabled = TRUE;
+CREATE INDEX idx_tag_importance_priority ON tag_importance_config (priority DESC);
+
+COMMENT ON TABLE tag_importance_config IS '标签重要性配置表 v61';
+
+-- 插入默认标签重要性规则
+INSERT INTO tag_importance_config (pattern, importance, description, priority, enabled, created_utc, updated_utc)
+VALUES
+    ('*Temperature*', 100, '温度类标签 - 关键指标', 100, TRUE, EXTRACT(EPOCH FROM NOW()) * 1000, EXTRACT(EPOCH FROM NOW()) * 1000),
+    ('*Current*', 100, '电流类标签 - 关键指标', 99, TRUE, EXTRACT(EPOCH FROM NOW()) * 1000, EXTRACT(EPOCH FROM NOW()) * 1000),
+    ('*Vibration*', 100, '振动类标签 - 关键指标', 98, TRUE, EXTRACT(EPOCH FROM NOW()) * 1000, EXTRACT(EPOCH FROM NOW()) * 1000),
+    ('*Pressure*', 70, '压力类标签 - 重要指标', 70, TRUE, EXTRACT(EPOCH FROM NOW()) * 1000, EXTRACT(EPOCH FROM NOW()) * 1000),
+    ('*Speed*', 70, '速度类标签 - 重要指标', 69, TRUE, EXTRACT(EPOCH FROM NOW()) * 1000, EXTRACT(EPOCH FROM NOW()) * 1000),
+    ('*Position*', 40, '位置类标签 - 次要指标', 50, TRUE, EXTRACT(EPOCH FROM NOW()) * 1000, EXTRACT(EPOCH FROM NOW()) * 1000),
+    ('*Humidity*', 20, '湿度类标签 - 辅助指标', 20, TRUE, EXTRACT(EPOCH FROM NOW()) * 1000, EXTRACT(EPOCH FROM NOW()) * 1000);
 
 -- ==================== Schema 版本表 ====================
 CREATE TABLE schema_version (
