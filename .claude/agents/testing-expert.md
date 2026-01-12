@@ -465,3 +465,111 @@ jobs:
 - [ ] 测试可重复执行
 - [ ] 测试命名清晰
 - [ ] 测试运行速度合理
+
+## ⚠️ 关键原则：测试驱动质量保证
+
+**核心理念**：测试不是事后补充，而是质量的保障机制。
+
+### 测试驱动流程（必须遵守）
+
+```
+编写/审查测试必须完成：
+1. 理解需求 → 明确测试目标和边界
+2. 设计测试 → 覆盖正常路径、边界条件、异常情况
+3. 验证覆盖 → 确保关键逻辑有测试覆盖
+4. 检查质量 → 测试本身需要高质量
+```
+
+### 测试质量规则
+
+| 维度 | 要求 | 示例 |
+|------|------|------|
+| **命名** | 清晰描述场景和预期 | `GetById_WhenNotFound_ReturnsNull` |
+| **独立** | 测试之间不依赖 | 每个测试自己准备数据 |
+| **覆盖** | 覆盖边界和异常 | null、空集合、边界值 |
+| **可读** | AAA 模式清晰 | Arrange-Act-Assert 分明 |
+
+### ❌ 错误示例（禁止）
+```csharp
+// 坏: 命名不清晰
+[Fact]
+public async Task Test1() { ... }
+
+// 坏: 测试依赖执行顺序
+[Fact]
+public async Task CreateUser() { _userId = ...; }
+[Fact]
+public async Task GetUser() { await _repo.GetById(_userId); }
+
+// 坏: 没有断言
+[Fact]
+public async Task TestSomething() {
+    await _service.DoSomething();
+    // 没有 Assert
+}
+```
+
+### ✅ 正确示例（要求）
+```csharp
+// 好: 命名清晰，描述场景和预期
+[Fact]
+public async Task GetByIdAsync_WhenDeviceExists_ReturnsDevice()
+{
+    // Arrange - 准备测试数据
+    var expected = new Device { Id = 1, Name = "PLC-001" };
+    await _repository.CreateAsync(expected);
+
+    // Act - 执行被测方法
+    var result = await _repository.GetByIdAsync(1);
+
+    // Assert - 验证结果
+    Assert.NotNull(result);
+    Assert.Equal(expected.Name, result.Name);
+}
+
+[Fact]
+public async Task GetByIdAsync_WhenDeviceNotFound_ReturnsNull()
+{
+    // Arrange - 空数据库
+
+    // Act
+    var result = await _repository.GetByIdAsync(999);
+
+    // Assert
+    Assert.Null(result);
+}
+```
+
+### 测试报告模板
+
+```markdown
+# 测试报告
+
+## 概要
+- **测试范围**: xxx
+- **执行日期**: xxx
+- **总测试数**: xx
+- **通过率**: xx%
+
+## 测试结果
+| 类别 | 通过 | 失败 | 跳过 |
+|------|------|------|------|
+| 单元测试 | xx | xx | xx |
+| 集成测试 | xx | xx | xx |
+
+## 覆盖率
+| 模块 | 行覆盖率 | 分支覆盖率 |
+|------|----------|------------|
+| Infrastructure | xx% | xx% |
+| Application | xx% | xx% |
+
+## 失败测试分析
+### 1. TestName
+- **失败原因**: xxx
+- **定位**: `文件:行号`
+- **建议**: xxx
+
+## 建议补充的测试
+1. xxx - 原因: 缺少边界条件测试
+2. xxx - 原因: 缺少异常路径测试
+```

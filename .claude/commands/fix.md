@@ -130,3 +130,58 @@ dotnet test
 2. 修复根因而非表象
 3. 必须添加回归测试
 4. 检查类似问题
+
+## ⚠️ 质量门禁 (必须满足)
+
+Bug 修复必须完成以下所有步骤才能视为完成：
+
+### 问题验证 (证据驱动)
+- [ ] **复现 Bug** - 记录具体复现步骤
+- [ ] **定位根因** - 提供 `文件:行号` 和代码证据
+- [ ] **理解影响** - 列出受影响的功能/场景
+
+### 修复实施
+- [ ] **修改代码** - 记录所有修改的文件和行号
+- [ ] **添加测试** - 至少一个测试覆盖此 Bug 场景
+- [ ] **无副作用** - 确认不引入新问题
+
+### 验证确认
+- [ ] **Bug 不再复现** - 按原复现步骤验证
+- [ ] **测试通过** - `dotnet test` 全部通过
+- [ ] **代码审查** - 通过 code-reviewer 检查
+
+### ❌ 不合格示例
+```markdown
+修复完成:
+- 修改了 UserService.cs  ← 没有具体行号
+- 问题应该修好了        ← 没有验证证据
+```
+
+### ✅ 合格示例
+```markdown
+## Bug 修复报告
+
+### 问题复现
+1. 登录页面输入用户名 "admin' --"
+2. 点击登录
+3. 实际结果: 登录成功 (应该失败)
+
+### 根因定位
+**文件**: `src/Infrastructure/Sqlite/UserRepository.cs:67`
+```csharp
+// 问题代码
+var sql = $"SELECT * FROM Users WHERE Username = '{username}'";
+```
+
+### 修复内容
+**文件**: `src/Infrastructure/Sqlite/UserRepository.cs:67`
+```csharp
+// 修复后
+var sql = "SELECT * FROM Users WHERE Username = @Username";
+```
+
+### 验证
+- [x] Bug 不再复现
+- [x] 添加测试: `SqlInjectionPreventionTests.cs`
+- [x] `dotnet test` 通过 (48/48)
+```
