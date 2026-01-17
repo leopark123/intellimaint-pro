@@ -1,0 +1,27 @@
+#!/bin/sh
+
+echo "Running pre-commit checks..."
+
+# Check if intellimaint-ui has changes
+UI_CHANGES=$(git diff --cached --name-only -- intellimaint-ui/)
+
+if [ -n "$UI_CHANGES" ]; then
+    echo "Frontend changes detected, running TypeScript type check..."
+    cd intellimaint-ui
+
+    # Run TypeScript type check
+    npm run type-check
+    TYPE_CHECK_EXIT=$?
+
+    if [ $TYPE_CHECK_EXIT -ne 0 ]; then
+        echo ""
+        echo "TypeScript type check failed!"
+        echo "Please fix the type errors before committing."
+        exit 1
+    fi
+
+    echo "TypeScript type check passed!"
+    cd ..
+fi
+
+echo "Pre-commit checks completed successfully!"

@@ -131,11 +131,15 @@ public sealed class TimescaleDbTimeSeriesDb : ITimeSeriesDb
                     "SELECT count(*) FROM pg_indexes WHERE schemaname = 'public'",
                     cancellationToken: ct));
 
-            // 获取遥测数据行数（使用估计值以提高性能）
+            // 获取遥测数据行数（使用 TimescaleDB 的 hypertable chunks 统计）
+            // 对于 hypertable，数据分布在多个 chunk 中，需要汇总所有 chunk 的行数
             var telemetryCount = await conn.ExecuteScalarAsync<long>(
                 new CommandDefinition(
                     @"SELECT COALESCE(
-                        (SELECT n_live_tup FROM pg_stat_user_tables WHERE relname = 'telemetry'),
+                        (SELECT SUM(n_live_tup) FROM pg_stat_user_tables pst
+                         JOIN timescaledb_information.chunks c
+                         ON pst.relname = c.chunk_name AND pst.schemaname = c.chunk_schema
+                         WHERE c.hypertable_name = 'telemetry'),
                         0
                     )",
                     cancellationToken: ct));

@@ -112,6 +112,76 @@ public sealed class MotorFaultDetectionService
     }
 
     /// <summary>
+    /// 对电机实例执行诊断，返回详细错误原因
+    /// </summary>
+    public async Task<(MotorDiagnosisResult? Result, string? ErrorReason)> DiagnoseWithReasonAsync(
+        string instanceId,
+        FaultDetectionConfig? config = null,
+        CancellationToken ct = default)
+    {
+        config ??= new FaultDetectionConfig();
+
+        var instance = await _instanceRepo.GetAsync(instanceId, ct);
+        if (instance == null)
+        {
+            _logger.LogDebug("Instance {InstanceId} not found", instanceId);
+            return (null, $"电机实例 '{instanceId}' 不存在");
+        }
+
+        if (!instance.DiagnosisEnabled)
+        {
+            _logger.LogDebug("Diagnosis disabled for instance {InstanceId}", instanceId);
+            return (null, "该电机实例未启用诊断功能，请在电机配置中启用");
+        }
+
+        var model = await _modelRepo.GetAsync(instance.ModelId, ct);
+        var mappings = await _mappingRepo.ListByInstanceAsync(instanceId, ct);
+
+        if (mappings.Count == 0)
+        {
+            _logger.LogDebug("No mappings for instance {InstanceId}", instanceId);
+            return (null, "未配置参数映射，请在电机配置中添加标签到电机参数的映射");
+        }
+
+        // 检测当前操作模式
+        var currentMode = await _modeDetector.DetectModeFromTelemetryAsync(
+            instanceId, instance.DeviceId, mappings, ct);
+
+        if (currentMode == null)
+        {
+            _logger.LogDebug("No active mode for instance {InstanceId}", instanceId);
+            return (null, "当前无匹配的运行模式，可能原因：1) 触发条件未满足 2) 未创建操作模式 3) 无实时数据");
+        }
+
+        // 获取该模式的基线
+        var baselines = await _baselineRepo.ListByModeAsync(currentMode.ModeId, ct);
+        if (baselines.Count == 0)
+        {
+            _logger.LogDebug("No baselines for mode {ModeId}", currentMode.ModeId);
+            return (null, $"运行模式 '{currentMode.Name}' 没有基线数据，请先执行基线学习");
+        }
+
+        // 获取当前参数值
+        var currentValues = await GetCurrentValuesAsync(instance.DeviceId, mappings, ct);
+
+        // 执行诊断
+        var result = PerformDiagnosis(
+            instanceId, currentMode.ModeId, model, mappings, baselines, currentValues, config);
+
+        // 缓存结果
+        lock (_lock)
+        {
+            _latestResults[instanceId] = result;
+        }
+
+        _logger.LogDebug(
+            "Diagnosis for {InstanceId}: HealthScore={Score:F1}, Faults={FaultCount}",
+            instanceId, result.HealthScore, result.Faults.Count);
+
+        return (result, null);
+    }
+
+    /// <summary>
     /// 获取最新诊断结果
     /// </summary>
     public MotorDiagnosisResult? GetLatestResult(string instanceId)

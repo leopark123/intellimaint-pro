@@ -16,6 +16,9 @@ public sealed class EdgeOptions
     /// <summary>API 基础地址（用于健康上报）</summary>
     public string ApiBaseUrl { get; init; } = "http://localhost:5000";
 
+    /// <summary>配置同步间隔（毫秒）</summary>
+    public int ConfigSyncIntervalMs { get; init; } = 30000;
+
     /// <summary>全局队列容量</summary>
     public int QueueCapacityGlobal { get; init; } = 200_000;
 

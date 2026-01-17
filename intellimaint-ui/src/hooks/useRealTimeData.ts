@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { telemetrySignalR, TelemetryDataPoint } from '../api/signalr'
 import { getLatestTelemetry } from '../api/telemetry'
+import { logError } from '../utils/logger'
 
 export type ConnectionMode = 'realtime' | 'polling' | 'disconnected'
 
@@ -85,8 +86,8 @@ export function useRealTimeData() {
           }))
           applyPoints(points)
         }
-      } catch (e: any) {
-        console.error('Polling failed:', e)
+      } catch (e: unknown) {
+        logError('Polling failed', e, 'useRealTimeData')
         // Continue polling even on failure
       }
     }, 1000)
@@ -100,9 +101,9 @@ export function useRealTimeData() {
       stopPolling()
       setMode('realtime')
       setError(null)
-    } catch (e: any) {
-      console.error('SignalR connect failed:', e)
-      setError(e?.message ?? 'SignalR connect failed')
+    } catch (e: unknown) {
+      logError('SignalR connect failed', e, 'useRealTimeData')
+      setError((e as Error)?.message ?? 'SignalR connect failed')
       startPolling()
     }
   }, [startPolling, stopPolling])

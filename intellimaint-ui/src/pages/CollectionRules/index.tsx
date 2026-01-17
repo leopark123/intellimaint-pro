@@ -59,6 +59,7 @@ import type { Device } from '../../types/device';
 import type { Tag as TagType } from '../../types/tag';
 import type { TelemetryPoint } from '../../types/telemetry';
 import dayjs from 'dayjs';
+import { logError } from '../../utils/logger';
 
 const { Text } = Typography;
 
@@ -85,8 +86,8 @@ const CollectionRulesPage: React.FC = () => {
     try {
       const data = await getCollectionRules();
       setRules(data.map(parseCollectionRule));
-    } catch (error: any) {
-      message.error(error.message || '加载失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -97,7 +98,7 @@ const CollectionRulesPage: React.FC = () => {
       const data = await getDevices();
       setDevices(data);
     } catch (error) {
-      console.error('加载设备失败', error);
+      logError('加载设备失败', error, 'CollectionRules');
     }
   };
 
@@ -106,7 +107,7 @@ const CollectionRulesPage: React.FC = () => {
       const data = await getTags();
       setTags(data);
     } catch (error) {
-      console.error('加载标签失败', error);
+      logError('加载标签失败', error, 'CollectionRules');
     }
   };
 
@@ -122,8 +123,8 @@ const CollectionRulesPage: React.FC = () => {
     try {
       const data = await getCollectionSegments({ limit: 100 });
       setSegments(data);
-    } catch (error: any) {
-      message.error(error.message || '加载采集片段失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '加载采集片段失败');
     } finally {
       setSegmentsLoading(false);
     }
@@ -156,8 +157,8 @@ const CollectionRulesPage: React.FC = () => {
         message.error(response.error || '加载数据失败');
         setSegmentData([]);
       }
-    } catch (error: any) {
-      message.error(error.message || '加载数据失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '加载数据失败');
       setSegmentData([]);
     } finally {
       setSegmentDataLoading(false);
@@ -170,8 +171,8 @@ const CollectionRulesPage: React.FC = () => {
       await deleteCollectionSegment(id);
       message.success('删除成功');
       loadSegments();
-    } catch (error: any) {
-      message.error(error.message || '删除失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '删除失败');
     }
   };
 
@@ -207,8 +208,8 @@ const CollectionRulesPage: React.FC = () => {
       await deleteCollectionRule(ruleId);
       message.success('删除成功');
       loadRules();
-    } catch (error: any) {
-      message.error(error.message || '删除失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '删除失败');
     }
   };
 
@@ -222,8 +223,8 @@ const CollectionRulesPage: React.FC = () => {
         message.success('已启用');
       }
       loadRules();
-    } catch (error: any) {
-      message.error(error.message || '操作失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '操作失败');
     }
   };
 
@@ -260,11 +261,12 @@ const CollectionRulesPage: React.FC = () => {
 
       setModalVisible(false);
       loadRules();
-    } catch (error: any) {
-      if (error.errorFields) {
+    } catch (error: unknown) {
+      const formErr = error as { errorFields?: unknown[] }
+      if (formErr.errorFields) {
         return; // 表单验证错误
       }
-      message.error(error.message || '保存失败');
+      message.error(((error as Error)?.message) || '保存失败');
     }
   };
 

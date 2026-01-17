@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Hosting;
 using IntelliMaint.Core.Contracts;
 using IntelliMaint.Host.Api.Endpoints;
 using IntelliMaint.Host.Api.Extensions;
@@ -56,7 +57,46 @@ try
     // P2: REST + Swagger
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen();
+    builder.Services.AddSwaggerGen(options =>
+    {
+        options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+        {
+            Title = "IntelliMaint Pro API",
+            Version = "v65",
+            Description = "Industrial AI Predictive Maintenance Platform API",
+            Contact = new Microsoft.OpenApi.Models.OpenApiContact
+            {
+                Name = "IntelliMaint Support",
+                Email = "support@intellimaint.com"
+            }
+        });
+
+        // JWT Bearer Authentication
+        options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+            Description = "Enter JWT token. Example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        });
+
+        options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+        {
+            {
+                new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                    {
+                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
+    });
     builder.Services.AddHealthChecks();
 
     // P2: SignalR
@@ -73,6 +113,12 @@ try
 
     // P2: 鍚庡彴鏈嶅姟
     builder.Services.AddBackgroundServices(builder.Configuration);
+
+    // v65: 后台服务异常行为配置 - 避免单个后台服务失败导致整个应用停止
+    builder.Services.Configure<HostOptions>(options =>
+    {
+        options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+    });
 
     // P2: CORS 绛栫暐
     builder.Services.AddCorsPolicies(builder.Configuration);

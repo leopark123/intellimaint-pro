@@ -46,7 +46,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<HealthAssessmentService>();
 
         // v61: 标签重要性匹配服务
-        services.AddSingleton<ITagImportanceMatcher, TagImportanceMatcher>();
+        services.AddSingleton<TagImportanceMatcher>();
+        services.AddSingleton<ITagImportanceMatcher>(sp => sp.GetRequiredService<TagImportanceMatcher>());
 
         // v62: 多标签关联分析服务
         services.AddSingleton<ICorrelationAnalyzer, CorrelationAnalyzer>();
@@ -210,6 +211,9 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // v63: 应用初始化服务 - 必须最先执行，预热各组件
+        services.AddHostedService<ApplicationInitializationService>();
+
         // 实时广播
         services.AddHostedService<TelemetryBroadcastService>();
 

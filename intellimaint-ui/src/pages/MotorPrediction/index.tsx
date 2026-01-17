@@ -1,6 +1,7 @@
 // v64: 电机故障预测页面
 
 import { useEffect, useState, useCallback } from 'react'
+import { logError } from '../../utils/logger'
 import {
   Card,
   Row,
@@ -155,7 +156,7 @@ const MotorPrediction = () => {
         setDiagnoses(diagnosesRes.data)
       }
     } catch (err) {
-      console.error('Failed to load data', err)
+      logError('Failed to load data', err, 'MotorPrediction')
       message.error('加载数据失败')
     } finally {
       setLoading(false)
@@ -170,7 +171,7 @@ const MotorPrediction = () => {
         setLearningTasks(res.data)
       }
     } catch (err) {
-      console.error('Failed to load learning tasks', err)
+      logError('Failed to load learning tasks', err, 'MotorPrediction')
     }
   }, [])
 
@@ -179,19 +180,69 @@ const MotorPrediction = () => {
     setDiagnosing(true)
     try {
       const res = await diagnoseMotor(instanceId)
-      if (res.success) {
+      if (res.success !== false && res.data?.diagnosisId) {
+        // 诊断成功，直接使用返回的结果
+        message.success('诊断完成')
+        setSelectedDiagnosis(res.data)
+        await loadData()
+      } else if (res.success === false || res.error) {
+        // API 返回错误
+        const errorMsg = res.error || '诊断失败'
+        Modal.error({
+          title: '诊断失败',
+          content: (
+            <div>
+              <p>{errorMsg}</p>
+              <Divider style={{ margin: '12px 0' }} />
+              <p style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>
+                <strong>可能的原因：</strong>
+              </p>
+              <ul style={{ paddingLeft: 20, margin: '8px 0', fontSize: 12 }}>
+                <li>电机实例未启用诊断功能</li>
+                <li>未配置参数映射（标签到电机参数的映射）</li>
+                <li>未创建操作模式</li>
+                <li>未学习基线数据</li>
+              </ul>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>
+                请前往<a href="/motor-config" target="_blank">电机配置</a>页面检查配置。
+              </p>
+            </div>
+          ),
+          okText: '确定',
+        })
+      } else if (res.data) {
+        // 兼容直接返回诊断结果的情况
+        setSelectedDiagnosis(res.data)
         message.success('诊断完成')
         await loadData()
-        // 更新选中的诊断结果
-        const updatedDiagnosis = diagnoses.find((d) => d.instanceId === instanceId)
-        if (updatedDiagnosis) {
-          setSelectedDiagnosis(res.data)
-        }
-      } else {
-        message.error(res.error || '诊断失败')
       }
-    } catch (err) {
-      message.error('诊断失败')
+    } catch (err: unknown) {
+      logError('Diagnose error', err, 'MotorPrediction')
+      const axiosErr = err as { response?: { data?: { error?: string } }; message?: string }
+      const errorMsg = axiosErr?.response?.data?.error || axiosErr?.message || '网络错误'
+      Modal.error({
+        title: '诊断请求失败',
+        content: (
+          <div>
+            <Alert
+              message={errorMsg}
+              type="error"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            <p style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>
+              <strong>排查步骤：</strong>
+            </p>
+            <ol style={{ paddingLeft: 20, margin: '8px 0', fontSize: 12 }}>
+              <li>检查网络连接是否正常</li>
+              <li>检查 API 服务是否运行</li>
+              <li>检查电机实例配置是否完整</li>
+              <li>查看浏览器控制台获取详细错误</li>
+            </ol>
+          </div>
+        ),
+        okText: '确定',
+      })
     } finally {
       setDiagnosing(false)
     }
@@ -207,10 +258,11 @@ const MotorPrediction = () => {
       } else {
         message.error(res.error || '启动失败，请检查电机配置')
       }
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.error || err?.message || '网络错误'
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } }; message?: string }
+      const errorMsg = axiosErr?.response?.data?.error || axiosErr?.message || '网络错误'
       message.error(`启动基线学习失败: ${errorMsg}`)
-      console.error('Learn baseline error:', err)
+      logError('Learn baseline error', err, 'MotorPrediction')
     }
   }
 
@@ -299,7 +351,7 @@ const MotorPrediction = () => {
       title: '健康评分',
       key: 'healthScore',
       width: 180,
-      render: (_: any, record: MotorInstance) => {
+      render: (_: unknown, record: MotorInstance) => {
         const diagnosis = getDiagnosisForInstance(record.instanceId)
         if (!diagnosis) {
           return <Tag>暂无数据</Tag>
@@ -324,7 +376,7 @@ const MotorPrediction = () => {
       title: '故障数',
       key: 'faults',
       width: 100,
-      render: (_: any, record: MotorInstance) => {
+      render: (_: unknown, record: MotorInstance) => {
         const diagnosis = getDiagnosisForInstance(record.instanceId)
         if (!diagnosis) return '-'
         const count = diagnosis.faults.length
@@ -341,7 +393,7 @@ const MotorPrediction = () => {
       title: '状态',
       key: 'status',
       width: 100,
-      render: (_: any, record: MotorInstance) => {
+      render: (_: unknown, record: MotorInstance) => {
         const diagnosis = getDiagnosisForInstance(record.instanceId)
         if (!diagnosis) {
           return <Tag>未诊断</Tag>
@@ -358,7 +410,7 @@ const MotorPrediction = () => {
       title: '诊断时间',
       key: 'timestamp',
       width: 160,
-      render: (_: any, record: MotorInstance) => {
+      render: (_: unknown, record: MotorInstance) => {
         const diagnosis = getDiagnosisForInstance(record.instanceId)
         if (!diagnosis) return '-'
         return new Date(diagnosis.timestamp).toLocaleString('zh-CN')
@@ -368,7 +420,7 @@ const MotorPrediction = () => {
       title: '操作',
       key: 'action',
       width: 180,
-      render: (_: any, record: MotorInstance) => {
+      render: (_: unknown, record: MotorInstance) => {
         const diagnosis = getDiagnosisForInstance(record.instanceId)
         return (
           <Space>

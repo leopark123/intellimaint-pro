@@ -65,6 +65,7 @@ import type {
 } from '../../types/motor'
 import type { Device } from '../../types/device'
 import type { Tag as TagEntity } from '../../types/tag'
+import { logError } from '../../utils/logger'
 
 // Motor type options
 const motorTypes = [
@@ -139,7 +140,7 @@ const MotorConfig = () => {
       setDevices(devicesData || [])
       setTags(tagsData || [])
     } catch (err) {
-      console.error('Failed to load data', err)
+      logError('Failed to load data', err, 'MotorConfig')
       message.error('Failed to load data')
     } finally {
       setLoading(false)
@@ -312,8 +313,9 @@ const MotorConfig = () => {
       } else {
         message.error(res.error || '启动学习失败，请检查配置')
       }
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.error || err?.message || '网络错误'
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } }; message?: string }
+      const errorMsg = axiosErr?.response?.data?.error || axiosErr?.message || '网络错误'
       message.error(`启动基线学习失败: ${errorMsg}`)
     }
   }
@@ -366,7 +368,7 @@ const MotorConfig = () => {
       title: 'Actions',
       key: 'actions',
       width: 100,
-      render: (_: any, record: MotorModel) => (
+      render: (_: unknown, record: MotorModel) => (
         <Popconfirm
           title="Delete this model?"
           onConfirm={() => handleDeleteModel(record.modelId)}
@@ -401,7 +403,7 @@ const MotorConfig = () => {
     {
       title: 'Model',
       key: 'modelId',
-      render: (_: any, record: MotorInstance) => {
+      render: (_: unknown, record: MotorInstance) => {
         const model = models.find((m) => m.modelId === record.modelId)
         return model?.name || record.modelId
       },
@@ -426,7 +428,7 @@ const MotorConfig = () => {
       title: 'Actions',
       key: 'actions',
       width: 200,
-      render: (_: any, record: MotorInstance) => (
+      render: (_: unknown, record: MotorInstance) => (
         <Space>
           <Button
             type="link"
@@ -823,7 +825,7 @@ const MotorConfig = () => {
                         {
                           title: 'Action',
                           key: 'action',
-                          render: (_: any, record: MotorParameterMapping) => (
+                          render: (_: unknown, record: MotorParameterMapping) => (
                             <Popconfirm
                               title="Delete this mapping?"
                               onConfirm={() => handleDeleteMapping(record.mappingId)}
@@ -872,7 +874,7 @@ const MotorConfig = () => {
                         {
                           title: 'Range',
                           key: 'range',
-                          render: (_: any, record: OperationMode) =>
+                          render: (_: unknown, record: OperationMode) =>
                             `${record.triggerMinValue} - ${record.triggerMaxValue}`,
                         },
                         {
@@ -886,7 +888,7 @@ const MotorConfig = () => {
                         {
                           title: 'Action',
                           key: 'action',
-                          render: (_: any, record: OperationMode) => (
+                          render: (_: unknown, record: OperationMode) => (
                             <Popconfirm
                               title="Delete this mode?"
                               onConfirm={() => handleDeleteMode(record.modeId)}

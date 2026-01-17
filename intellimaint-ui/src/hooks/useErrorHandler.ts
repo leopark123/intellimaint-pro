@@ -1,5 +1,6 @@
 import { message } from 'antd'
 import { useCallback } from 'react'
+import { logError } from '../utils/logger'
 
 /**
  * v48: API 错误响应格式
@@ -83,10 +84,8 @@ export function useErrorHandler() {
     // 显示错误提示
     message.error(customMessage || errorMessage)
     
-    // 开发环境打印详细错误
-    if (import.meta.env.DEV) {
-      console.error('API Error:', { error, code, message: errorMessage })
-    }
+    // 使用统一日志服务记录错误
+    logError('API Error', { error, code, message: errorMessage }, 'useErrorHandler')
     
     return { message: errorMessage, code }
   }, [])

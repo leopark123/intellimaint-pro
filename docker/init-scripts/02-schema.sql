@@ -1,5 +1,5 @@
 -- IntelliMaint Pro - TimescaleDB Schema
--- Version: 1.0 (migrated from SQLite v15)
+-- Version: 1.1 (v65 - synced with application code)
 
 -- ==================== 设备表 ====================
 CREATE TABLE device (
@@ -31,7 +31,9 @@ CREATE TABLE tag (
     address TEXT,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_utc BIGINT NOT NULL,
-    updated_utc BIGINT NOT NULL
+    updated_utc BIGINT NOT NULL,
+    scan_interval_ms INTEGER DEFAULT 1000,
+    metadata JSONB
 );
 
 CREATE INDEX idx_tag_device ON tag (device_id);
@@ -127,7 +129,9 @@ CREATE TABLE alarm_rule (
     roc_window_ms INTEGER,
     roc_threshold DOUBLE PRECISION,
     created_utc BIGINT NOT NULL,
-    updated_utc BIGINT NOT NULL
+    updated_utc BIGINT NOT NULL,
+    duration_ms BIGINT DEFAULT 0,
+    message_template TEXT
 );
 
 CREATE INDEX idx_alarm_rule_tag ON alarm_rule (tag_id) WHERE enabled = TRUE;
@@ -247,10 +251,11 @@ CREATE TABLE audit_log (
     id BIGSERIAL,
     ts BIGINT NOT NULL,
     user_id TEXT,
+    user_name TEXT,
     action TEXT NOT NULL,
     resource_type TEXT NOT NULL,
     resource_id TEXT,
-    details JSONB,
+    details TEXT,
     ip_address TEXT,
     PRIMARY KEY (id, ts)
 );
@@ -278,7 +283,10 @@ CREATE TABLE health_baseline (
     device_id TEXT PRIMARY KEY REFERENCES device(device_id) ON DELETE CASCADE,
     baseline_data JSONB NOT NULL,
     created_utc BIGINT NOT NULL,
-    updated_utc BIGINT NOT NULL
+    updated_utc BIGINT NOT NULL,
+    sample_count INTEGER DEFAULT 0,
+    learning_hours INTEGER DEFAULT 0,
+    tag_baselines_json JSONB
 );
 
 COMMENT ON TABLE health_baseline IS '设备健康基线表';
@@ -335,7 +343,9 @@ CREATE TABLE collection_rule (
     trigger_count INTEGER NOT NULL DEFAULT 0,
     last_trigger_utc BIGINT,
     created_utc BIGINT NOT NULL,
-    updated_utc BIGINT NOT NULL
+    updated_utc BIGINT NOT NULL,
+    start_condition_json TEXT,
+    stop_condition_json TEXT
 );
 
 CREATE INDEX idx_collection_rule_device ON collection_rule (device_id) WHERE enabled = TRUE;

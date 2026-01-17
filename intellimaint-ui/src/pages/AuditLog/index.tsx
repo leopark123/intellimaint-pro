@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import { getAuditActions, getAuditResourceTypes, queryAuditLogs } from '../../api/audit'
 import type { AuditLogEntry, PagedAuditLogResult } from '../../types/audit'
 import { ActionLabels, ResourceTypeLabels } from '../../types/audit'
+import { logError } from '../../utils/logger'
 
 const { RangePicker } = DatePicker
 const { Text } = Typography
@@ -36,7 +37,7 @@ export default function AuditLog() {
       if (a.success && a.data) setActions(a.data)
       if (r.success && r.data) setResourceTypes(r.data)
     } catch (err) {
-      console.error(err)
+      logError('加载筛选项失败', err, 'AuditLog')
       message.error('加载筛选项失败')
     }
   }, [])
@@ -69,7 +70,7 @@ export default function AuditLog() {
 
         setData(res.data)
       } catch (err) {
-        console.error(err)
+        logError('查询审计日志失败', err, 'AuditLog')
         message.error('查询失败')
       } finally {
         setLoading(false)

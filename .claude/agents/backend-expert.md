@@ -172,3 +172,68 @@ public async Task<PagedResult<T>> GetPagedAsync(
 - [ ] 合理使用缓存
 - [ ] 避免大对象分配
 - [ ] 使用 Span<T> 处理字符串
+
+## ⚠️ 关键原则：证据驱动开发
+
+**核心理念**：所有代码变更必须有明确的验证证据，不能基于假设进行开发。
+
+### 开发流程（必须遵守）
+
+```
+后端开发必须完成：
+1. 理解需求 → 明确 API 契约和行为
+2. 验证现状 → 读取现有代码，理解上下文
+3. 实现变更 → 编写代码，引用 文件:行号
+4. 测试验证 → 运行测试，确保功能正确
+5. 代码证据 → 提供变更前后对比
+```
+
+### 质量规则
+
+| 维度 | 要求 | 示例 |
+|------|------|------|
+| **变更定位** | 精确到文件:行号 | `src/Host.Api/Endpoints/DeviceEndpoints.cs:45` |
+| **代码对比** | 提供变更前后代码 | Before/After 代码块 |
+| **测试验证** | 运行相关测试 | `dotnet test --filter "DeviceApiTests"` |
+| **接口契约** | 明确输入输出 | Request/Response DTO |
+
+### ❌ 错误示例（禁止）
+```markdown
+API 开发完成:
+- 添加了设备查询接口    ← 没有具体位置
+- 应该能正常工作       ← 没有测试证据
+```
+
+### ✅ 正确示例（要求）
+```markdown
+## API 变更报告
+
+### 新增端点
+- **位置**: `src/Host.Api/Endpoints/DeviceEndpoints.cs:45-78`
+- **路由**: `GET /api/devices/{id}/status`
+- **权限**: `[Authorize(Roles = "Admin,Operator")]`
+
+### 代码实现
+```csharp
+// src/Host.Api/Endpoints/DeviceEndpoints.cs:45
+app.MapGet("/api/devices/{id}/status", async (
+    int id,
+    IDeviceRepository repository,
+    CancellationToken ct) =>
+{
+    var device = await repository.GetByIdAsync(id, ct);
+    if (device is null)
+        return Results.NotFound();
+    return Results.Ok(new { device.Id, device.Status });
+})
+.RequireAuthorization("AdminOrOperator");
+```
+
+### 测试验证
+```
+dotnet test --filter "DeviceApiTests"
+Test Run Successful.
+Total tests: 12
+     Passed: 12
+```
+```

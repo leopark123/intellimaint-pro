@@ -1,4 +1,5 @@
 import apiClient from './client'
+import { logError } from '../utils/logger'
 
 export interface TelemetryExportParams {
   deviceId?: string
@@ -52,7 +53,7 @@ async function downloadFile(url: string, filename: string): Promise<void> {
       window.URL.revokeObjectURL(blobUrl)
     }, 100)
   } catch (error) {
-    console.error('Download failed:', error)
+    logError('Download failed', error, 'Export')
     throw error
   }
 }

@@ -19,7 +19,8 @@ public sealed class TagImportanceMatcher : ITagImportanceMatcher
     // 缓存：编译后的正则表达式配置
     private List<(Regex Regex, TagImportance Importance)> _compiledPatterns = new();
     private readonly object _lock = new();
-    private bool _initialized;
+    private volatile bool _initialized;
+    private volatile bool _warnedNotInitialized;
 
     public TagImportanceMatcher(
         ITagImportanceRepository repository,
@@ -34,7 +35,7 @@ public sealed class TagImportanceMatcher : ITagImportanceMatcher
     /// <inheritdoc />
     public TagImportance GetImportance(string tagId)
     {
-        EnsureInitialized();
+        WarnIfNotInitialized();
 
         lock (_lock)
         {
@@ -54,7 +55,7 @@ public sealed class TagImportanceMatcher : ITagImportanceMatcher
     /// <inheritdoc />
     public IReadOnlyDictionary<string, TagImportance> GetImportances(IEnumerable<string> tagIds)
     {
-        EnsureInitialized();
+        WarnIfNotInitialized();
 
         var result = new Dictionary<string, TagImportance>();
 
@@ -111,43 +112,28 @@ public sealed class TagImportanceMatcher : ITagImportanceMatcher
     }
 
     /// <summary>
-    /// 确保已初始化（首次使用时同步加载）
+    /// 异步初始化（推荐在应用启动时调用）
     /// </summary>
-    private void EnsureInitialized()
+    public async Task InitializeAsync(CancellationToken ct)
     {
         if (_initialized) return;
 
-        lock (_lock)
+        await RefreshAsync(ct);
+        _logger.LogInformation("Tag importance matcher initialized asynchronously");
+    }
+
+    /// <summary>
+    /// 检查是否已初始化（不阻塞）
+    /// 如果未初始化，记录警告并使用默认值（仅警告一次）
+    /// </summary>
+    private void WarnIfNotInitialized()
+    {
+        if (!_initialized && !_warnedNotInitialized)
         {
-            if (_initialized) return;
-
-            // 同步加载（仅首次）
-            try
-            {
-                var configs = _repository.ListEnabledAsync(CancellationToken.None).GetAwaiter().GetResult();
-
-                foreach (var config in configs)
-                {
-                    try
-                    {
-                        var regex = WildcardToRegex(config.Pattern);
-                        _compiledPatterns.Add((regex, config.Importance));
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Invalid pattern: {Pattern}", config.Pattern);
-                    }
-                }
-
-                _initialized = true;
-                _logger.LogInformation("Tag importance matcher initialized with {Count} patterns",
-                    _compiledPatterns.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to initialize tag importance matcher");
-                _initialized = true; // 标记为已初始化，避免重复尝试
-            }
+            _warnedNotInitialized = true;
+            _logger.LogWarning(
+                "TagImportanceMatcher not initialized, using default importance. " +
+                "Ensure InitializeAsync() is called at startup.");
         }
     }
 

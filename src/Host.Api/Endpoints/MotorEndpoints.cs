@@ -272,7 +272,7 @@ public static class MotorEndpoints
         }
 
         await repo.DeleteAsync(modelId, ct);
-        return Results.NoContent();
+        return Results.Ok(new { success = true });
     }
 
     // ========== 电机实例实现 ==========
@@ -377,7 +377,7 @@ public static class MotorEndpoints
         CancellationToken ct)
     {
         await repo.DeleteAsync(instanceId, ct);
-        return Results.NoContent();
+        return Results.Ok(new { success = true });
     }
 
     // ========== 参数映射实现 ==========
@@ -446,7 +446,7 @@ public static class MotorEndpoints
         CancellationToken ct)
     {
         await repo.DeleteAsync(mappingId, ct);
-        return Results.NoContent();
+        return Results.Ok(new { success = true });
     }
 
     // ========== 操作模式实现 ==========
@@ -523,7 +523,7 @@ public static class MotorEndpoints
         CancellationToken ct)
     {
         await repo.DeleteAsync(modeId, ct);
-        return Results.NoContent();
+        return Results.Ok(new { success = true });
     }
 
     private static async Task<IResult> SetOperationModeEnabled(
@@ -565,7 +565,7 @@ public static class MotorEndpoints
         CancellationToken ct)
     {
         await repo.DeleteByModeAsync(modeId, ct);
-        return Results.NoContent();
+        return Results.Ok(new { success = true });
     }
 
     // ========== 基线学习实现 ==========
@@ -686,12 +686,14 @@ public static class MotorEndpoints
             }
             : new FaultDetectionConfig { EnableAlarmGeneration = false };
 
-        var result = await faultService.DiagnoseAsync(instanceId, config, ct);
+        var (result, errorReason) = await faultService.DiagnoseWithReasonAsync(instanceId, config, ct);
 
         if (result == null)
-            return Results.NotFound(new { error = "无法执行诊断，请检查实例配置和基线数据" });
+        {
+            return Results.Ok(new { success = false, error = errorReason ?? "无法执行诊断，请检查实例配置和基线数据" });
+        }
 
-        return Results.Ok(result);
+        return Results.Ok(new { success = true, data = result });
     }
 
     private static Task<IResult> GetLatestDiagnosis(
@@ -700,8 +702,8 @@ public static class MotorEndpoints
     {
         var result = faultService.GetLatestResult(instanceId);
         return result != null
-            ? Task.FromResult(Results.Ok(result))
-            : Task.FromResult(Results.NotFound(new { error = "暂无诊断结果" }));
+            ? Task.FromResult(Results.Ok(new { success = true, data = result }))
+            : Task.FromResult(Results.Ok(new { success = false, error = "暂无诊断结果，请先执行诊断" }));
     }
 
     private static Task<IResult> GetAllDiagnoses(

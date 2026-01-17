@@ -51,6 +51,7 @@ import {
   getDeviceBaseline
 } from '../../api/healthAssessment'
 import { getDevices } from '../../api/device'
+import { logError } from '../../utils/logger'
 
 const HealthAssessment = () => {
   const [loading, setLoading] = useState(false)
@@ -75,7 +76,7 @@ const HealthAssessment = () => {
         setSelectedDevice(deviceList[0].id)
       }
     } catch (err) {
-      console.error('Failed to load devices', err)
+      logError('Failed to load devices', err, 'HealthAssessment')
     }
   }, [selectedDevice])
 
@@ -87,7 +88,7 @@ const HealthAssessment = () => {
         setSummary(res.data)
       }
     } catch (err) {
-      console.error('Failed to load summary', err)
+      logError('Failed to load summary', err, 'HealthAssessment')
     }
   }, [])
 
@@ -99,7 +100,7 @@ const HealthAssessment = () => {
         setAllScores(res.data)
       }
     } catch (err) {
-      console.error('Failed to load all scores', err)
+      logError('Failed to load all scores', err, 'HealthAssessment')
     }
   }, [])
 
@@ -126,7 +127,7 @@ const HealthAssessment = () => {
 
       setHasBaseline(baselineRes.success)
     } catch (err) {
-      console.error('Failed to load device details', err)
+      logError('Failed to load device details', err, 'HealthAssessment')
     } finally {
       setLoading(false)
     }
@@ -263,7 +264,7 @@ const HealthAssessment = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: HealthScore) => (
+      render: (_: unknown, record: HealthScore) => (
         <Button type="link" size="small" onClick={() => setSelectedDevice(record.deviceId)}>
           查看详情
         </Button>

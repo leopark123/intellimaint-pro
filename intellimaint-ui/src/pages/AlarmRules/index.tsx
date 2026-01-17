@@ -11,6 +11,7 @@ import type { AlarmRule, CreateAlarmRuleRequest, UpdateAlarmRuleRequest } from '
 import { ConditionTypeOptions, SeverityOptions, getThresholdLabel, needsRocWindow, getRuleTypeFromCondition } from '../../types/alarmRule'
 import type { Device } from '../../types/device'
 import type { Tag as TagEntity } from '../../types/tag'
+import { logError } from '../../utils/logger'
 
 function formatTime(ts: number) {
   return dayjs(ts).format('YYYY-MM-DD HH:mm:ss')
@@ -39,7 +40,7 @@ export default function AlarmRules() {
       }
       setRules(res.data)
     } catch (err) {
-      console.error(err)
+      logError('加载告警规则失败', err, 'AlarmRules')
       message.error('加载告警规则失败')
     } finally {
       setLoading(false)
@@ -51,7 +52,7 @@ export default function AlarmRules() {
       const deviceList = await getDevices()
       setDevices(deviceList)
     } catch (err) {
-      console.error(err)
+      logError('加载设备失败', err, 'AlarmRules')
     }
   }, [])
 
@@ -64,7 +65,7 @@ export default function AlarmRules() {
       const tagList = await getTagsByDevice(deviceId)
       setTags(tagList)
     } catch (err) {
-      console.error(err)
+      logError('加载标签失败', err, 'AlarmRules')
       setTags([])
     }
   }, [])
@@ -188,7 +189,7 @@ export default function AlarmRules() {
       closeModal()
       await refreshRules()
     } catch (err) {
-      console.error(err)
+      logError('保存规则失败', err, 'AlarmRules')
       // validateFields 会抛出错误，这里不提示
     } finally {
       setModalSubmitting(false)
@@ -206,7 +207,7 @@ export default function AlarmRules() {
         message.success('删除成功')
         await refreshRules()
       } catch (err) {
-        console.error(err)
+        logError('删除规则失败', err, 'AlarmRules')
         message.error('删除失败')
       }
     },
@@ -224,7 +225,7 @@ export default function AlarmRules() {
         message.success(enabled ? '已启用' : '已禁用')
         await refreshRules()
       } catch (err) {
-        console.error(err)
+        logError('更新规则状态失败', err, 'AlarmRules')
         message.error('更新状态失败')
       }
     },

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using Serilog;
@@ -5,8 +6,9 @@ using Serilog;
 namespace IntelliMaint.Host.Api.Middleware;
 
 /// <summary>
-/// v48: 全局异常处理中间件
+/// v65: 全局异常处理中间件
 /// 统一处理未捕获异常，返回一致的错误响应格式
+/// 支持 TraceId 用于生产环境问题追踪
 /// </summary>
 public sealed class GlobalExceptionMiddleware
 {
@@ -32,23 +34,28 @@ public sealed class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Unhandled exception for {Method} {Path}", 
-                context.Request.Method, context.Request.Path);
-            
-            await HandleExceptionAsync(context, ex);
+            var traceId = Activity.Current?.Id ?? context.TraceIdentifier;
+
+            Log.Error(ex, "Unhandled exception for {Method} {Path} [TraceId: {TraceId}]",
+                context.Request.Method, context.Request.Path, traceId);
+
+            await HandleExceptionAsync(context, ex, traceId);
         }
     }
 
-    private async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private async Task HandleExceptionAsync(HttpContext context, Exception exception, string traceId)
     {
         context.Response.ContentType = "application/json";
 
         var (statusCode, errorCode, message) = exception switch
         {
+            ArgumentNullException => (HttpStatusCode.BadRequest, "ARGUMENT_NULL", "必填参数不能为空"),
             ArgumentException argEx => (HttpStatusCode.BadRequest, "INVALID_ARGUMENT", argEx.Message),
             KeyNotFoundException => (HttpStatusCode.NotFound, "NOT_FOUND", "资源不存在"),
             UnauthorizedAccessException => (HttpStatusCode.Forbidden, "FORBIDDEN", "无权访问"),
             InvalidOperationException invEx => (HttpStatusCode.BadRequest, "INVALID_OPERATION", invEx.Message),
+            TimeoutException => (HttpStatusCode.GatewayTimeout, "TIMEOUT", "请求超时"),
+            NotImplementedException => (HttpStatusCode.NotImplemented, "NOT_IMPLEMENTED", "功能暂未实现"),
             _ => (HttpStatusCode.InternalServerError, "INTERNAL_ERROR", "服务器内部错误")
         };
 
@@ -59,6 +66,7 @@ public sealed class GlobalExceptionMiddleware
             Success = false,
             Error = message,
             ErrorCode = errorCode,
+            TraceId = traceId,
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             // 仅在开发环境显示详细错误信息
             Details = _env.IsDevelopment() ? exception.ToString() : null
@@ -74,13 +82,14 @@ public sealed class GlobalExceptionMiddleware
 }
 
 /// <summary>
-/// 错误响应格式
+/// 统一错误响应格式
 /// </summary>
 public sealed record ErrorResponse
 {
     public bool Success { get; init; } = false;
     public string? Error { get; init; }
     public string? ErrorCode { get; init; }
+    public string? TraceId { get; init; }
     public long Timestamp { get; init; }
     public string? Details { get; init; }
 }

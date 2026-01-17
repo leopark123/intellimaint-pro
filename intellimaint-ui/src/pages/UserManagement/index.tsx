@@ -118,8 +118,8 @@ export default function UserManagement() {
         return
       }
       setUsers(resp.data ?? [])
-    } catch (e: any) {
-      message.error(e?.message ?? '获取用户列表失败')
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? '获取用户列表失败')
     } finally {
       setLoading(false)
     }
@@ -191,9 +191,10 @@ export default function UserManagement() {
 
       setModalOpen(false)
       load()
-    } catch (e: any) {
-      if (e.errorFields) return
-      message.error(e?.message ?? '操作失败')
+    } catch (e: unknown) {
+      const formErr = e as { errorFields?: unknown[] }
+      if (formErr.errorFields) return
+      message.error((e as Error)?.message ?? '操作失败')
     }
   }
 
@@ -206,8 +207,8 @@ export default function UserManagement() {
       }
       message.success('用户已禁用')
       load()
-    } catch (e: any) {
-      message.error(e?.message ?? '禁用失败')
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? '禁用失败')
     }
   }
 
@@ -220,8 +221,8 @@ export default function UserManagement() {
       }
       message.success('用户已启用')
       load()
-    } catch (e: any) {
-      message.error(e?.message ?? '启用失败')
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? '启用失败')
     }
   }
 
@@ -240,9 +241,10 @@ export default function UserManagement() {
       }
       message.success('密码已重置')
       setResetModalOpen(false)
-    } catch (e: any) {
-      if (e.errorFields) return
-      message.error(e?.message ?? '重置密码失败')
+    } catch (e: unknown) {
+      const formErr = e as { errorFields?: unknown[] }
+      if (formErr.errorFields) return
+      message.error((e as Error)?.message ?? '重置密码失败')
     }
   }
 

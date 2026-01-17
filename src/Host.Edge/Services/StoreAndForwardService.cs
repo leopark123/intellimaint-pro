@@ -180,6 +180,9 @@ public sealed class StoreAndForwardService : BackgroundService, IAsyncDisposable
                     }
                     _isOnline = true;
                     _consecutiveFailures = 0;
+
+                    // 上报心跳状态
+                    await ReportStatusAsync(ct);
                 }
                 else
                 {

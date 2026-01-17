@@ -82,8 +82,8 @@ export default function TagManagement() {
         setSelectedDeviceId(list[0].deviceId)
         setSelectedDeviceProtocol(list[0].protocol || '')
       }
-    } catch (e: any) {
-      message.error(e?.message ?? '获取设备列表失败')
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? '获取设备列表失败')
       setDevices([])
     } finally {
       setLoading(false)
@@ -100,8 +100,8 @@ export default function TagManagement() {
     try {
       const data = await getTagsByDevice(deviceId)
       setTags(data)
-    } catch (e: any) {
-      message.error(e?.message ?? '获取标签列表失败')
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? '获取标签列表失败')
       setTags([])
     } finally {
       setLoading(false)
@@ -222,9 +222,10 @@ export default function TagManagement() {
       message.success('标签更新成功')
       setModalOpen(false)
       await loadTags(selectedDeviceId)
-    } catch (e: any) {
-      if (e?.message && typeof e.message === 'string') {
-        message.error(e.message)
+    } catch (e: unknown) {
+      const errMsg = (e as Error)?.message
+      if (errMsg && typeof errMsg === 'string') {
+        message.error(errMsg)
       }
     } finally {
       setLoading(false)
@@ -238,8 +239,8 @@ export default function TagManagement() {
         await deleteTag(tagId)
         message.success('删除成功')
         await loadTags(selectedDeviceId)
-      } catch (e: any) {
-        message.error(e?.message ?? '删除失败')
+      } catch (e: unknown) {
+        message.error((e as Error)?.message ?? '删除失败')
       } finally {
         setLoading(false)
       }
@@ -254,8 +255,8 @@ export default function TagManagement() {
         await updateTag(tag.tagId, { enabled })
         message.success(enabled ? '已启用' : '已禁用')
         await loadTags(selectedDeviceId)
-      } catch (e: any) {
-        message.error(e?.message ?? '状态更新失败')
+      } catch (e: unknown) {
+        message.error((e as Error)?.message ?? '状态更新失败')
       } finally {
         setLoading(false)
       }

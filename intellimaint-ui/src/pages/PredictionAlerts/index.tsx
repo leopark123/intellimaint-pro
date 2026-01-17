@@ -46,6 +46,7 @@ import {
   RulStatusLabels,
   DegradationTypeLabels
 } from '../../types/prediction'
+import { logError } from '../../utils/logger'
 
 const { TabPane } = Tabs
 
@@ -85,7 +86,7 @@ const PredictionAlerts = () => {
         setAlertsSummary(alertsRes.data.summary)
       }
     } catch (err) {
-      console.error('Failed to load prediction data', err)
+      logError('Failed to load prediction data', err, 'PredictionAlerts')
       message.error('加载预测数据失败')
     } finally {
       setLoading(false)

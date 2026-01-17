@@ -31,6 +31,7 @@ import {
 import type { Device } from '../../types/device'
 import type { AlarmGroup, AlarmGroupQuery, Alarm } from '../../types/alarm'
 import { SeverityOptions, StatusOptions } from '../../types/alarm'
+import { logError } from '../../utils/logger'
 
 const { RangePicker } = DatePicker
 
@@ -81,7 +82,7 @@ export default function AlarmGroups() {
       const deviceList = await getDevices()
       setDevices(deviceList)
     } catch (err) {
-      console.error(err)
+      logError('加载设备列表失败', err, 'AlarmGroups')
       message.error('加载设备列表失败')
       setDevices([])
     }
@@ -94,7 +95,7 @@ export default function AlarmGroups() {
         setOpenCount(res.data.openCount ?? 0)
       }
     } catch (err) {
-      console.error(err)
+      logError('加载统计失败', err, 'AlarmGroups')
     }
   }, [])
 
@@ -119,7 +120,7 @@ export default function AlarmGroups() {
 
       await loadStats()
     } catch (err) {
-      console.error(err)
+      logError('查询聚合告警失败', err, 'AlarmGroups')
       message.error('查询聚合告警失败')
     } finally {
       setLoading(false)
@@ -144,7 +145,7 @@ export default function AlarmGroups() {
       setNextToken(data.nextToken || undefined)
       setTotalCount(data.totalCount || 0)
     } catch (err) {
-      console.error(err)
+      logError('加载下一页失败', err, 'AlarmGroups')
       message.error('加载下一页失败')
     } finally {
       setLoading(false)
@@ -200,7 +201,7 @@ export default function AlarmGroups() {
         message.error(res.error || '获取详情失败')
       }
     } catch (err) {
-      console.error(err)
+      logError('获取详情失败', err, 'AlarmGroups')
       message.error('获取详情失败')
     } finally {
       setDetailLoading(false)
@@ -238,7 +239,7 @@ export default function AlarmGroups() {
       setAckTarget(null)
       await loadFirstPage()
     } catch (err) {
-      if (err) console.error(err)
+      if (err) logError('确认聚合组失败', err, 'AlarmGroups')
     } finally {
       setAckSubmitting(false)
     }
@@ -255,7 +256,7 @@ export default function AlarmGroups() {
       message.success(`已关闭聚合组及其 ${group.alarmCount} 条告警`)
       await loadFirstPage()
     } catch (err) {
-      console.error(err)
+      logError('关闭聚合组失败', err, 'AlarmGroups')
       message.error('关闭失败')
     }
   }, [loadFirstPage])

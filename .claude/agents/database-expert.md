@@ -272,3 +272,75 @@ GROUP BY bucket, tag_id;
 - [ ] 大结果集分页
 - [ ] 定期 VACUUM/ANALYZE
 - [ ] 监控慢查询
+
+## ⚠️ 关键原则：证据驱动数据库设计
+
+**核心理念**：所有数据库变更必须有执行计划验证，性能优化必须有度量数据。
+
+### 设计流程（必须遵守）
+
+```
+数据库变更必须完成：
+1. 理解需求 → 明确数据模型和查询模式
+2. 验证现状 → 分析当前 Schema 和索引
+3. 设计方案 → 提供 DDL 语句
+4. 执行计划 → EXPLAIN 验证查询效率
+5. 性能基线 → 提供优化前后对比数据
+```
+
+### 质量规则
+
+| 维度 | 要求 | 示例 |
+|------|------|------|
+| **Schema 位置** | 精确到文件:行号 | `SchemaManager.cs:45` |
+| **执行计划** | 提供 EXPLAIN 输出 | `SCAN TABLE` vs `SEARCH TABLE USING INDEX` |
+| **性能数据** | 提供查询耗时 | `Before: 120ms → After: 15ms` |
+| **索引分析** | 说明索引使用情况 | `IX_Tags_DeviceId 被使用` |
+
+### ❌ 错误示例（禁止）
+```markdown
+数据库优化完成:
+- 添加了索引          ← 没有说明哪个索引
+- 应该会更快         ← 没有性能数据证明
+```
+
+### ✅ 正确示例（要求）
+```markdown
+## 数据库变更报告
+
+### 新增索引
+- **位置**: `src/Infrastructure/Sqlite/SchemaManager.cs:89`
+- **DDL**:
+```sql
+CREATE INDEX IX_Alarms_DeviceId_Status ON Alarms(DeviceId, Status);
+```
+
+### 执行计划对比
+
+**优化前**:
+```
+EXPLAIN QUERY PLAN
+SELECT * FROM Alarms WHERE DeviceId = 1 AND Status = 0;
+--result: SCAN TABLE Alarms
+```
+
+**优化后**:
+```
+EXPLAIN QUERY PLAN
+SELECT * FROM Alarms WHERE DeviceId = 1 AND Status = 0;
+--result: SEARCH TABLE Alarms USING INDEX IX_Alarms_DeviceId_Status
+```
+
+### 性能对比
+| 指标 | 优化前 | 优化后 | 提升 |
+|------|--------|--------|------|
+| 查询耗时 | 120ms | 8ms | 93% |
+| 扫描行数 | 50000 | 23 | 99.9% |
+
+### 验证命令
+```sql
+-- 确认索引被使用
+.indices Alarms
+-- 输出: IX_Alarms_DeviceId_Status
+```
+```

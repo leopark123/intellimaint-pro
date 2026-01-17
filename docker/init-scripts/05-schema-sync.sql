@@ -116,6 +116,15 @@ BEGIN
         ALTER TABLE audit_log ADD COLUMN user_name TEXT;
         RAISE NOTICE 'Added column: audit_log.user_name';
     END IF;
+
+    -- v65: 将 details 列从 JSONB 转换为 TEXT
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'audit_log' AND column_name = 'details' AND data_type = 'jsonb'
+    ) THEN
+        ALTER TABLE audit_log ALTER COLUMN details TYPE TEXT;
+        RAISE NOTICE 'Changed column type: audit_log.details from JSONB to TEXT';
+    END IF;
 END $$;
 
 -- ==================== 7. 补充 alarm_rule 表缺失字段 ====================
@@ -135,9 +144,68 @@ BEGIN
         ALTER TABLE alarm_rule ADD COLUMN threshold_high DOUBLE PRECISION;
         RAISE NOTICE 'Added column: alarm_rule.threshold_high';
     END IF;
+
+    -- v65: 添加 duration_ms 字段
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'alarm_rule' AND column_name = 'duration_ms') THEN
+        ALTER TABLE alarm_rule ADD COLUMN duration_ms BIGINT DEFAULT 0;
+        RAISE NOTICE 'Added column: alarm_rule.duration_ms';
+    END IF;
+
+    -- v65: 添加 message_template 字段
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'alarm_rule' AND column_name = 'message_template') THEN
+        ALTER TABLE alarm_rule ADD COLUMN message_template TEXT;
+        RAISE NOTICE 'Added column: alarm_rule.message_template';
+    END IF;
 END $$;
 
--- ==================== 8. 数据类型统一说明 ====================
+-- ==================== 8. 补充 health_baseline 表缺失字段 (v65) ====================
+
+DO $$
+BEGIN
+    -- 添加 sample_count 字段
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'health_baseline' AND column_name = 'sample_count') THEN
+        ALTER TABLE health_baseline ADD COLUMN sample_count INTEGER DEFAULT 0;
+        RAISE NOTICE 'Added column: health_baseline.sample_count';
+    END IF;
+
+    -- 添加 learning_hours 字段
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'health_baseline' AND column_name = 'learning_hours') THEN
+        ALTER TABLE health_baseline ADD COLUMN learning_hours INTEGER DEFAULT 0;
+        RAISE NOTICE 'Added column: health_baseline.learning_hours';
+    END IF;
+
+    -- 添加 tag_baselines_json 字段
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'health_baseline' AND column_name = 'tag_baselines_json') THEN
+        ALTER TABLE health_baseline ADD COLUMN tag_baselines_json JSONB;
+        RAISE NOTICE 'Added column: health_baseline.tag_baselines_json';
+    END IF;
+END $$;
+
+-- ==================== 9. 补充 collection_rule 表缺失字段 (v65) ====================
+
+DO $$
+BEGIN
+    -- 添加 start_condition_json 字段
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'collection_rule' AND column_name = 'start_condition_json') THEN
+        ALTER TABLE collection_rule ADD COLUMN start_condition_json TEXT;
+        RAISE NOTICE 'Added column: collection_rule.start_condition_json';
+    END IF;
+
+    -- 添加 stop_condition_json 字段
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name = 'collection_rule' AND column_name = 'stop_condition_json') THEN
+        ALTER TABLE collection_rule ADD COLUMN stop_condition_json TEXT;
+        RAISE NOTICE 'Added column: collection_rule.stop_condition_json';
+    END IF;
+END $$;
+
+-- ==================== 10. 数据类型统一说明 ====================
 
 -- tag.data_type 字段类型差异说明:
 -- - SQLite: INTEGER (枚举值)
@@ -187,7 +255,7 @@ ON CONFLICT (version) DO UPDATE SET applied_utc = EXTRACT(EPOCH FROM NOW()) * 10
 DO $$
 BEGIN
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'Schema Synchronization Complete';
+    RAISE NOTICE 'Schema Synchronization Complete (v65)';
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Added tables: mqtt_outbox, api_key';
     RAISE NOTICE 'Added columns: device.model, device.metadata';
@@ -195,7 +263,10 @@ BEGIN
     RAISE NOTICE 'Added columns: user.display_name';
     RAISE NOTICE 'Added columns: alarm.group_id';
     RAISE NOTICE 'Added columns: audit_log.user_name';
-    RAISE NOTICE 'Added columns: alarm_rule.rule_type, alarm_rule.threshold_high';
+    RAISE NOTICE 'Changed type: audit_log.details (JSONB -> TEXT)';
+    RAISE NOTICE 'Added columns: alarm_rule.rule_type, threshold_high, duration_ms, message_template';
+    RAISE NOTICE 'Added columns: health_baseline.sample_count, learning_hours, tag_baselines_json';
+    RAISE NOTICE 'Added columns: collection_rule.start_condition_json, stop_condition_json';
     RAISE NOTICE '';
     RAISE NOTICE 'Schema version: 4';
     RAISE NOTICE '========================================';

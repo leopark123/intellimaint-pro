@@ -183,15 +183,4 @@ public sealed class ConfigSyncService : BackgroundService
     }
 }
 
-/// <summary>
-/// Edge 配置选项（扩展）
-/// </summary>
-public class EdgeOptions
-{
-    public const string SectionName = "Edge";
-
-    public string EdgeId { get; set; } = "edge-001";
-    public string ApiBaseUrl { get; set; } = "http://localhost:5000";
-    public int ConfigSyncIntervalMs { get; set; } = 30000;
-    public int ChannelCapacity { get; set; } = 10000;
-}
+// EdgeOptions 已移至 IntelliMaint.Core.Contracts.EdgeOptions

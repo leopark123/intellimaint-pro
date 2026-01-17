@@ -23,10 +23,11 @@ export default function LoginPage() {
       setAuth(response)
       message.success(`欢迎回来，${response.username}！`)
       navigate(from, { replace: true })
-    } catch (error: any) {
-      if (error.response?.status === 401) {
+    } catch (error: unknown) {
+      const axiosErr = error as { response?: { status?: number } }
+      if (axiosErr.response?.status === 401) {
         message.error('用户名或密码错误')
-      } else if (error.response?.status === 429) {
+      } else if (axiosErr.response?.status === 429) {
         message.error('账号已锁定，请稍后重试')
       } else {
         message.error('登录失败，请稍后重试')

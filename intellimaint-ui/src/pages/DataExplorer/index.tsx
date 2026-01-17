@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import { queryTelemetry, getTags } from '../../api/telemetry'
 import { exportTelemetryCsv, exportTelemetryXlsx } from '../../api/export'
 import type { TelemetryPoint, TagInfo, TelemetryQueryParams } from '../../types/telemetry'
+import { logError } from '../../utils/logger'
 
 const { RangePicker } = DatePicker
 
@@ -26,7 +27,7 @@ export default function DataExplorer() {
         setTags(res.data)
       }
     } catch (error) {
-      console.error(error)
+      logError('加载标签失败', error, 'DataExplorer')
     }
   }
 
@@ -70,7 +71,7 @@ export default function DataExplorer() {
       }
     } catch (error) {
       message.error('查询失败')
-      console.error(error)
+      logError('查询遥测数据失败', error, 'DataExplorer')
     } finally {
       setLoading(false)
     }
@@ -97,7 +98,7 @@ export default function DataExplorer() {
       await exportTelemetryCsv(params)
       message.success({ content: 'CSV 导出成功', key: 'export' })
     } catch (err) {
-      console.error('Export CSV failed:', err)
+      logError('CSV导出失败', err, 'DataExplorer')
       message.error({ content: '导出失败', key: 'export' })
     }
   }, [])
@@ -109,7 +110,7 @@ export default function DataExplorer() {
       await exportTelemetryXlsx(params)
       message.success({ content: 'Excel 导出成功', key: 'export' })
     } catch (err) {
-      console.error('Export Excel failed:', err)
+      logError('Excel导出失败', err, 'DataExplorer')
       message.error({ content: '导出失败', key: 'export' })
     }
   }, [])

@@ -394,26 +394,34 @@ public sealed class CollectionRuleEngine : BackgroundService
 
     private async Task FinalizeAllSegmentsAsync(CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var segmentRepo = scope.ServiceProvider.GetRequiredService<ICollectionSegmentRepository>();
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-        foreach (var state in _ruleStates.Values)
+        try
         {
-            if (state.CurrentSegmentId != null)
+            using var scope = _scopeFactory.CreateScope();
+            var segmentRepo = scope.ServiceProvider.GetRequiredService<ICollectionSegmentRepository>();
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            foreach (var state in _ruleStates.Values)
             {
-                try
+                if (state.CurrentSegmentId != null)
                 {
-                    await segmentRepo.SetEndTimeAsync(state.CurrentSegmentId.Value, now, ct);
-                    await segmentRepo.UpdateStatusAsync(state.CurrentSegmentId.Value, SegmentStatus.Completed, 0, ct);
-                    Log.Information("Finalized segment {SegmentId} for rule {RuleId}", 
-                        state.CurrentSegmentId.Value, state.RuleId);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to finalize segment {SegmentId}", state.CurrentSegmentId.Value);
+                    try
+                    {
+                        await segmentRepo.SetEndTimeAsync(state.CurrentSegmentId.Value, now, ct);
+                        await segmentRepo.UpdateStatusAsync(state.CurrentSegmentId.Value, SegmentStatus.Completed, 0, ct);
+                        Log.Information("Finalized segment {SegmentId} for rule {RuleId}",
+                            state.CurrentSegmentId.Value, state.RuleId);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Failed to finalize segment {SegmentId}", state.CurrentSegmentId.Value);
+                    }
                 }
             }
+        }
+        catch (ObjectDisposedException)
+        {
+            // ServiceProvider已被释放，应用正在关闭，忽略此错误
+            Log.Warning("ServiceProvider disposed during finalization - application is shutting down");
         }
     }
 

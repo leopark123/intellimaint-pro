@@ -72,7 +72,7 @@ public sealed class EdgeDataProcessor
         if (tagConfig?.Bypass == true)
         {
             state.LastValue = GetNumericValue(point);
-            state.LastTimestamp = point.Timestamp;
+            state.LastTimestamp = point.Ts;
             return point;
         }
 
@@ -178,15 +178,15 @@ public sealed class EdgeDataProcessor
     {
         return point.ValueType switch
         {
-            DataType.Float32 => point.Float32Value,
-            DataType.Float64 => point.Float64Value,
-            DataType.Int32 => point.Int32Value,
-            DataType.Int64 => point.Int64Value,
-            DataType.Int16 => point.Int16Value,
-            DataType.UInt16 => point.UInt16Value,
-            DataType.UInt32 => point.UInt32Value,
-            DataType.Int8 => point.Int8Value,
-            DataType.UInt8 => point.UInt8Value,
+            TagValueType.Float32 => point.Float32Value,
+            TagValueType.Float64 => point.Float64Value,
+            TagValueType.Int32 => point.Int32Value,
+            TagValueType.Int64 => point.Int64Value,
+            TagValueType.Int16 => point.Int16Value,
+            TagValueType.UInt16 => point.UInt16Value,
+            TagValueType.UInt32 => point.UInt32Value,
+            TagValueType.Int8 => point.Int8Value,
+            TagValueType.UInt8 => point.UInt8Value,
             _ => null
         };
     }

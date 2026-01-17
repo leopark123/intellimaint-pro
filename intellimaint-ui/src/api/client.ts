@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getToken, clearAuth, refreshTokenIfNeeded, isTokenExpiringSoon } from '../store/authStore'
+import { logError, logWarn } from '../utils/logger'
 
 const apiClient = axios.create({
   baseURL: '/api',
@@ -62,7 +63,7 @@ apiClient.interceptors.response.use(
 
       // 429 Too Many Requests - 账号锁定或限流
       if (status === 429) {
-        console.warn('Rate limited or account locked:', data?.error)
+        logWarn('Rate limited or account locked', data?.error, 'ApiClient')
       }
 
       // v56.1: 提取 API 返回的错误信息，覆盖 axios 默认的 "Request failed with status code XXX"
@@ -73,11 +74,11 @@ apiClient.interceptors.response.use(
 
     // 网络错误
     if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout')
+      logError('Request timeout', error, 'ApiClient')
     }
 
     if (error.message === 'Network Error') {
-      console.error('Network error - server may be unavailable')
+      logError('Network error - server may be unavailable', error, 'ApiClient')
     }
 
     return Promise.reject(error)

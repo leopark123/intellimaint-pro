@@ -1,52 +1,136 @@
-# IntelliMaint Pro v56 API 文档
+# IntelliMaint Pro v65 API Documentation
 
-## 概述
+## Overview
 
-IntelliMaint Pro 提供 RESTful API 用于设备管理、数据采集、告警处理等功能。
+IntelliMaint Pro provides RESTful APIs for device management, data collection, health assessment, alarm handling, and predictive maintenance.
 
 **Base URL**: `http://localhost:5000`
+**Swagger UI**: `http://localhost:5000/swagger` (Development only)
 
-## 认证
+## Authentication
 
-所有 API（除登录外）需要 JWT Bearer Token 认证：
+All APIs (except login and health check) require JWT Bearer Token:
 
 ```http
 Authorization: Bearer <access_token>
 ```
 
-## API 端点列表
+### Getting a Token
 
-| 模块 | 端点 | 说明 |
-|------|------|------|
-| [认证](./authentication.md) | `/api/auth/*` | 登录、刷新 Token |
-| [设备](./devices.md) | `/api/devices/*` | 设备 CRUD |
-| [标签](./tags.md) | `/api/tags/*` | 标签管理 |
-| [遥测](./telemetry.md) | `/api/telemetry/*` | 数据查询 |
-| [告警](./alarms.md) | `/api/alarms/*` | 告警管理 |
-| [告警规则](./alarm-rules.md) | `/api/alarm-rules/*` | 规则配置 |
-| [用户](./users.md) | `/api/users/*` | 用户管理 |
-| [审计日志](./audit-logs.md) | `/api/audit-logs/*` | 操作审计 |
+```bash
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}'
+```
 
-## 通用响应格式
+## API Modules
 
+| Module | Endpoint | Description | Doc |
+|--------|----------|-------------|-----|
+| Authentication | `/api/auth/*` | Login, Refresh Token | [auth](./authentication.md) |
+| Devices | `/api/devices/*` | Device CRUD | [devices](./devices.md) |
+| Tags | `/api/tags/*` | Tag Management | [tags](./tags.md) |
+| Telemetry | `/api/telemetry/*` | Data Query | [telemetry](./telemetry.md) |
+| Alarms | `/api/alarms/*` | Alarm Management | [alarms](./alarms.md) |
+| Alarm Rules | `/api/alarm-rules/*` | Rule Configuration | [alarm-rules](./alarm-rules.md) |
+| **Health Assessment** | `/api/health-assessment/*` | Device Health Scoring | [health](./health-assessment.md) |
+| **Motor Diagnostics** | `/api/motors/*` | Motor Fault Detection | [motors](./motors.md) |
+| **Predictions** | `/api/predictions/*` | Trend & RUL Prediction | [predictions](./predictions.md) |
+| Users | `/api/users/*` | User Management | [users](./users.md) |
+| Audit Logs | `/api/audit-logs/*` | Operation Audit | [audit-logs](./audit-logs.md) |
+| System Health | `/api/health` | Health Check | - |
+
+## Standard Response Format
+
+**Success:**
 ```json
 {
   "success": true,
-  "data": { ... },
-  "error": null
+  "data": { ... }
 }
 ```
 
-## 权限角色
+**Error:**
+```json
+{
+  "success": false,
+  "error": "Error message",
+  "errorCode": "ERROR_CODE",
+  "traceId": "0HN4...",
+  "timestamp": 1704153600000
+}
+```
 
-| 角色 | 说明 |
-|------|------|
-| Admin | 完全访问权限 |
-| Operator | 设备/告警管理（无删除权限） |
-| Viewer | 只读权限 |
+## Role Permissions
 
-## v56 新增 API
+| Role | Description | Permissions |
+|------|-------------|-------------|
+| Admin | Full access | All operations including user management |
+| Operator | Operations | Create/update devices, ack alarms, configure rules |
+| Viewer | Read-only | View data, no modifications |
 
-- 告警规则支持 `conditionType: offline` (离线检测)
-- 告警规则支持 `conditionType: roc_percent/roc_absolute` (变化率)
-- 告警规则新增 `rocWindowMs` 字段
+## v65 New Features
+
+### Health Assessment API
+- `GET /api/health-assessment` - Get all device health scores
+- `GET /api/health-assessment/{deviceId}` - Get specific device health
+- `POST /api/health-assessment/{deviceId}/learn` - Learn baseline
+- 4-dimensional health scoring (Deviation, Trend, Stability, Alarm)
+
+### Motor Diagnostics API
+- `GET /api/motors/{id}/diagnosis` - FFT-based fault detection
+- 15+ fault types (Bearing, Electrical, Mechanical, Thermal)
+- Confidence scores and recommendations
+
+### Prediction API
+- `GET /api/predictions/{deviceId}/trend` - Trend prediction
+- `GET /api/predictions/{deviceId}/rul` - Remaining useful life
+
+### Enhanced Alarms
+- Alarm aggregation (grouping similar alarms)
+- `GET /api/alarms/aggregated` - List alarm groups
+- `POST /api/alarms/groups/{groupId}/ack` - Acknowledge group
+
+## SignalR Real-time Hub
+
+**Endpoint**: `/hubs/telemetry`
+
+```javascript
+// Connect
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl('/hubs/telemetry', {
+    accessTokenFactory: () => token
+  })
+  .withAutomaticReconnect()
+  .build();
+
+// Subscribe
+await connection.invoke('SubscribeAll');
+
+// Receive data
+connection.on('ReceiveData', (data) => {
+  console.log('Telemetry:', data);
+});
+```
+
+## Rate Limiting
+
+- **Limit**: 100 requests / 60 seconds
+- **Scope**: Per IP address
+- **Response**: HTTP 429 Too Many Requests
+
+## Error Codes
+
+| Code | HTTP | Description |
+|------|------|-------------|
+| `INVALID_ARGUMENT` | 400 | Invalid parameter |
+| `ARGUMENT_NULL` | 400 | Required parameter missing |
+| `NOT_FOUND` | 404 | Resource not found |
+| `FORBIDDEN` | 403 | Insufficient permissions |
+| `UNAUTHORIZED` | 401 | Authentication required |
+| `TIMEOUT` | 504 | Request timeout |
+| `INTERNAL_ERROR` | 500 | Server error |
+
+---
+
+*Last Updated: 2026-01-13 | Version: v65*

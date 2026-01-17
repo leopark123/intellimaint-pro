@@ -145,3 +145,96 @@ dotnet build --warnaserror
 - `/refactor extract-method` - 提取方法重构
 - `/refactor rename` - 重命名重构
 - `/refactor cleanup` - 清理死代码
+
+## ⚠️ 质量门禁 (必须满足)
+
+重构必须严格遵循测试驱动流程，每个阶段都有明确检查点：
+
+### 阶段 1: 重构前准备
+- [ ] **测试基线** - 运行 `dotnet test`，记录当前测试结果
+- [ ] **覆盖率检查** - 被重构代码有测试覆盖（否则先补测试）
+- [ ] **代码快照** - 记录重构前代码状态
+- [ ] **目标明确** - 清晰描述重构目的和预期改进
+
+### 阶段 2: 重构执行
+- [ ] **小步验证** - 每个重构步骤后运行测试
+- [ ] **保持绿灯** - 测试必须始终通过
+- [ ] **原子提交** - 每步可独立回滚
+- [ ] **功能不变** - 不添加新功能，不修复无关 Bug
+
+### 阶段 3: 重构后验证
+- [ ] **测试全过** - `dotnet test` 100% 通过
+- [ ] **无回归** - 与基线对比，测试数量不减少
+- [ ] **构建成功** - `dotnet build --warnaserror` 无警告
+- [ ] **代码审查** - 确认改进符合预期
+
+### 测试记录表（必须填写）
+
+```markdown
+## 测试执行记录
+
+| 阶段 | 命令 | 测试数 | 通过 | 失败 | 时间 |
+|------|------|--------|------|------|------|
+| 重构前 | dotnet test | xx | xx | 0 | xx:xx |
+| 步骤1后 | dotnet test | xx | xx | 0 | xx:xx |
+| 步骤2后 | dotnet test | xx | xx | 0 | xx:xx |
+| 重构后 | dotnet test | xx | xx | 0 | xx:xx |
+```
+
+### ❌ 不合格示例
+```markdown
+重构完成:
+- 提取了几个方法       ← 没有测试证据
+- 应该没问题          ← 没有验证记录
+```
+
+### ✅ 合格示例
+```markdown
+# 重构报告: DeviceRepository
+
+## 重构目标
+将 200 行的 QueryDevices 方法拆分为多个职责单一的小方法
+
+## 测试执行记录
+| 阶段 | 命令 | 测试数 | 通过 | 失败 |
+|------|------|--------|------|------|
+| 重构前 | dotnet test | 48 | 48 | 0 |
+| 提取 BuildWhereClause 后 | dotnet test | 48 | 48 | 0 |
+| 提取 BuildOrderByClause 后 | dotnet test | 48 | 48 | 0 |
+| 提取 ExecutePagedQuery 后 | dotnet test | 48 | 48 | 0 |
+| 重构后 | dotnet test | 48 | 48 | 0 |
+
+## 重构前
+```csharp
+// src/Infrastructure/Sqlite/DeviceRepository.cs:45
+public async Task<PagedResult<Device>> QueryDevices(DeviceQuery query)
+{
+    // 200 行复杂逻辑...
+}
+```
+
+## 重构后
+```csharp
+public async Task<PagedResult<Device>> QueryDevices(DeviceQuery query)
+{
+    var whereClause = BuildWhereClause(query);
+    var orderBy = BuildOrderByClause(query);
+    return await ExecutePagedQuery(whereClause, orderBy, query.Page, query.PageSize);
+}
+
+private string BuildWhereClause(DeviceQuery query) { ... }
+private string BuildOrderByClause(DeviceQuery query) { ... }
+private async Task<PagedResult<Device>> ExecutePagedQuery(...) { ... }
+```
+
+## 改进点
+- ✅ 方法行数: 200 → 4 + 25 + 20 + 35 (主方法 4 行)
+- ✅ 可读性: 显著提升
+- ✅ 可测试性: 子方法可独立测试
+- ✅ 测试回归: 无 (48/48)
+
+## 验证
+- [x] 所有测试通过: 48/48
+- [x] 无编译警告
+- [x] 代码审查: 无问题
+```

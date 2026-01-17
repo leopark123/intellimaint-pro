@@ -38,6 +38,7 @@ import { exportAlarmsCsv, exportAlarmsXlsx } from '../../api/export'
 import type { Device } from '../../types/device'
 import type { Alarm, AlarmQuery, AlarmTrendPoint, AlarmGroupStats } from '../../types/alarm'
 import { SeverityOptions, StatusOptions } from '../../types/alarm'
+import { logError } from '../../utils/logger'
 
 const { RangePicker } = DatePicker
 
@@ -94,7 +95,7 @@ export default function AlarmManagement() {
       const deviceList = await getDevices()
       setDevices(deviceList)
     } catch (err) {
-      console.error(err)
+      logError('加载设备列表失败', err, 'AlarmManagement')
       message.error('加载设备列表失败')
       setDevices([])
     }
@@ -113,7 +114,7 @@ export default function AlarmManagement() {
         setGroupStats(groupStatsRes.data)
       }
     } catch (err) {
-      console.error(err)
+      logError('加载统计失败', err, 'AlarmManagement')
     }
   }, [])
 
@@ -129,7 +130,7 @@ export default function AlarmManagement() {
         setTrendData(chartData as any)
       }
     } catch (err) {
-      console.error(err)
+      logError('加载统计失败', err, 'AlarmManagement')
     }
   }, [])
 
@@ -157,7 +158,7 @@ export default function AlarmManagement() {
         loadTrend(q.deviceId)
       ])
     } catch (err) {
-      console.error(err)
+      logError('查询告警失败', err, 'AlarmManagement')
       message.error('查询告警失败')
     } finally {
       setLoading(false)
@@ -182,7 +183,7 @@ export default function AlarmManagement() {
       setNextToken(data.nextToken || undefined)
       setTotalCount(data.totalCount || 0)
     } catch (err) {
-      console.error(err)
+      logError('加载下一页失败', err, 'AlarmManagement')
       message.error('加载下一页失败')
     } finally {
       setLoading(false)
@@ -208,7 +209,7 @@ export default function AlarmManagement() {
       await exportAlarmsCsv(params)
       message.success({ content: 'CSV 导出成功', key: 'export' })
     } catch (err) {
-      console.error(err)
+      logError('CSV导出失败', err, 'AlarmManagement')
       message.error({ content: '导出失败', key: 'export' })
     }
   }, [filters])
@@ -227,7 +228,7 @@ export default function AlarmManagement() {
       await exportAlarmsXlsx(params)
       message.success({ content: 'Excel 导出成功', key: 'export' })
     } catch (err) {
-      console.error(err)
+      logError('Excel导出失败', err, 'AlarmManagement')
       message.error({ content: '导出失败', key: 'export' })
     }
   }, [filters])
@@ -292,7 +293,7 @@ export default function AlarmManagement() {
       await loadFirstPage()
     } catch (err) {
       // 表单校验失败会抛错
-      if (err) console.error(err)
+      if (err) logError('确认告警失败', err, 'AlarmManagement')
     } finally {
       setAckSubmitting(false)
     }
@@ -308,7 +309,7 @@ export default function AlarmManagement() {
       message.success('告警已关闭')
       await loadFirstPage()
     } catch (err) {
-      console.error(err)
+      logError('关闭告警失败', err, 'AlarmManagement')
       message.error('关闭告警失败')
     }
   }, [loadFirstPage])
@@ -346,7 +347,7 @@ export default function AlarmManagement() {
       setCreateModalOpen(false)
       await loadFirstPage()
     } catch (err) {
-      if (err) console.error(err)
+      if (err) logError('创建告警失败', err, 'AlarmManagement')
     } finally {
       setCreateSubmitting(false)
     }

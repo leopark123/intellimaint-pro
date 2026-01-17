@@ -54,6 +54,7 @@ import {
 } from '../../types/cycleAnalysis';
 import type { Device } from '../../types/device';
 import type { Tag as TagType } from '../../types/tag';
+import { logError } from '../../utils/logger';
 
 const { RangePicker } = DatePicker;
 const { TabPane } = Tabs;
@@ -82,7 +83,7 @@ const CycleAnalysisPage: React.FC = () => {
       const data = await getDevices();
       setDevices(data);
     } catch (error) {
-      console.error('加载设备失败', error);
+      logError('加载设备失败', error, 'CycleAnalysis');
     }
   };
 
@@ -91,7 +92,7 @@ const CycleAnalysisPage: React.FC = () => {
       const data = await getTags();
       setTags(data);
     } catch (error) {
-      console.error('加载标签失败', error);
+      logError('加载标签失败', error, 'CycleAnalysis');
     }
   };
 
@@ -102,8 +103,8 @@ const CycleAnalysisPage: React.FC = () => {
       setCycles(data);
       const statsData = await getCycleStats(deviceId);
       setStats(statsData);
-    } catch (error: any) {
-      message.error(error.message || '加载失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -114,8 +115,8 @@ const CycleAnalysisPage: React.FC = () => {
     try {
       const data = await getAnomalyCycles(deviceId);
       setCycles(data);
-    } catch (error: any) {
-      message.error(error.message || '加载失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -125,8 +126,8 @@ const CycleAnalysisPage: React.FC = () => {
     try {
       const data = await getBaselines(deviceId);
       setBaselines(data);
-    } catch (error: any) {
-      message.error(error.message || '加载基线失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '加载基线失败');
     }
   };
 
@@ -164,8 +165,8 @@ const CycleAnalysisPage: React.FC = () => {
       setCycles(result.cycles);
       setStats(result.summary || null);
       message.success(`分析完成: 检测到 ${result.cycleCount} 个周期, ${result.anomalyCycleCount} 个异常`);
-    } catch (error: any) {
-      message.error(error.message || '分析失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '分析失败');
     } finally {
       setAnalyzing(false);
     }
@@ -194,8 +195,8 @@ const CycleAnalysisPage: React.FC = () => {
 
       message.success('基线学习完成');
       loadBaselines(values.deviceId);
-    } catch (error: any) {
-      message.error(error.message || '基线学习失败');
+    } catch (error: unknown) {
+      message.error(((error as Error)?.message) || '基线学习失败');
     } finally {
       setLearning(false);
     }

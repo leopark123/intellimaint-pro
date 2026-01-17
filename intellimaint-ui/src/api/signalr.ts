@@ -6,6 +6,7 @@ import {
   LogLevel
 } from '@microsoft/signalr'
 import { getToken, refreshTokenIfNeeded, isTokenExpiringSoon } from '../store/authStore'
+import { logError, logInfo, logWarn } from '../utils/logger'
 
 export interface TelemetryDataPoint {
   deviceId: string
@@ -56,29 +57,29 @@ export class TelemetrySignalR {
         try {
           cb(payload)
         } catch (e) {
-          console.error('Data callback error:', e)
+          logError('Data callback error', e, 'SignalR')
         }
       }
     })
 
     this.connection.onreconnecting((err) => {
-      console.warn('SignalR reconnecting...', err)
+      logWarn('SignalR reconnecting...', err, 'SignalR')
       this.emitConnection(false)
     })
 
     this.connection.onreconnected(() => {
-      console.info('SignalR reconnected')
+      logInfo('SignalR reconnected', undefined, 'SignalR')
       this.emitConnection(true)
       // Re-subscribe after reconnect (hook will call subscribeAll)
     })
 
     this.connection.onclose((err) => {
-      console.warn('SignalR closed', err)
+      logWarn('SignalR closed', err, 'SignalR')
       this.emitConnection(false)
     })
 
     await this.connection.start()
-    console.info('SignalR connected')
+    logInfo('SignalR connected', undefined, 'SignalR')
     this.emitConnection(true)
   }
 
@@ -87,7 +88,7 @@ export class TelemetrySignalR {
     try {
       await this.connection.stop()
     } catch (e) {
-      console.error('Disconnect error:', e)
+      logError('Disconnect error', e, 'SignalR')
     } finally {
       this.emitConnection(false)
     }
@@ -97,9 +98,9 @@ export class TelemetrySignalR {
     if (!this.connection || this.connection.state !== HubConnectionState.Connected) return
     try {
       await this.connection.invoke('SubscribeAll')
-      console.info('Subscribed to all data')
+      logInfo('Subscribed to all data', undefined, 'SignalR')
     } catch (e) {
-      console.error('SubscribeAll error:', e)
+      logError('SubscribeAll error', e, 'SignalR')
     }
   }
 
@@ -108,9 +109,9 @@ export class TelemetrySignalR {
     if (!this.connection || this.connection.state !== HubConnectionState.Connected) return
     try {
       await this.connection.invoke('SubscribeDevice', deviceId)
-      console.info('Subscribed to device:', deviceId)
+      logInfo('Subscribed to device', deviceId, 'SignalR')
     } catch (e) {
-      console.error('SubscribeDevice error:', e)
+      logError('SubscribeDevice error', e, 'SignalR')
     }
   }
 
@@ -119,9 +120,9 @@ export class TelemetrySignalR {
     if (!this.connection || this.connection.state !== HubConnectionState.Connected) return
     try {
       await this.connection.invoke('UnsubscribeDevice', deviceId)
-      console.info('Unsubscribed from device:', deviceId)
+      logInfo('Unsubscribed from device', deviceId, 'SignalR')
     } catch (e) {
-      console.error('UnsubscribeDevice error:', e)
+      logError('UnsubscribeDevice error', e, 'SignalR')
     }
   }
 
@@ -129,9 +130,9 @@ export class TelemetrySignalR {
     if (!this.connection || this.connection.state !== HubConnectionState.Connected) return
     try {
       await this.connection.invoke('UnsubscribeAll')
-      console.info('Unsubscribed from all data')
+      logInfo('Unsubscribed from all data', undefined, 'SignalR')
     } catch (e) {
-      console.error('UnsubscribeAll error:', e)
+      logError('UnsubscribeAll error', e, 'SignalR')
     }
   }
 
@@ -182,7 +183,7 @@ export class TelemetrySignalR {
       try {
         cb(connected, state)
       } catch (e) {
-        console.error('Connection callback error:', e)
+        logError('Connection callback error', e, 'SignalR')
       }
     }
   }

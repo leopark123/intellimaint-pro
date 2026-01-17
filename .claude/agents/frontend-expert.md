@@ -217,3 +217,77 @@ await connection.invoke('SubscribeDevice', deviceId);
 - [ ] 图片懒加载
 - [ ] 路由懒加载 React.lazy
 - [ ] 避免在 render 中创建新对象/数组
+
+## ⚠️ 关键原则：证据驱动 UI 开发
+
+**核心理念**：所有 UI 变更必须有明确的验证证据，组件行为需可验证。
+
+### 开发流程（必须遵守）
+
+```
+前端开发必须完成：
+1. 理解需求 → 明确组件行为和交互
+2. 验证现状 → 读取现有代码，理解组件结构
+3. 实现变更 → 编写代码，引用 文件:行号
+4. 验证渲染 → 检查 TypeScript 编译通过
+5. 交互验证 → 说明如何测试交互行为
+```
+
+### 质量规则
+
+| 维度 | 要求 | 示例 |
+|------|------|------|
+| **组件定位** | 精确到文件:行号 | `src/pages/Dashboard/index.tsx:45` |
+| **Props 类型** | 明确 TypeScript 接口 | `interface DeviceCardProps { ... }` |
+| **状态管理** | 说明状态来源和流向 | `useAuthStore` → `user` |
+| **构建验证** | TypeScript 编译通过 | `npm run build` 无错误 |
+
+### ❌ 错误示例（禁止）
+```markdown
+组件开发完成:
+- 添加了设备卡片组件    ← 没有具体位置
+- 应该能正常显示       ← 没有验证证据
+```
+
+### ✅ 正确示例（要求）
+```markdown
+## 组件变更报告
+
+### 新增组件
+- **位置**: `src/components/DeviceCard/index.tsx`
+- **导出**: `export default DeviceCard`
+
+### Props 定义
+```typescript
+// src/components/DeviceCard/index.tsx:5-10
+interface DeviceCardProps {
+  device: Device;
+  onEdit?: (id: number) => void;
+  onDelete?: (id: number) => void;
+}
+```
+
+### 组件实现
+```tsx
+// src/components/DeviceCard/index.tsx:12-35
+const DeviceCard: React.FC<DeviceCardProps> = memo(({ device, onEdit }) => {
+  const handleEdit = useCallback(() => {
+    onEdit?.(device.id);
+  }, [device.id, onEdit]);
+
+  return (
+    <Card title={device.name}>
+      <Button onClick={handleEdit}>编辑</Button>
+    </Card>
+  );
+});
+```
+
+### 构建验证
+```
+npm run build
+✓ TypeScript 编译成功
+✓ 无类型错误
+✓ 构建产物: dist/ (1.2MB)
+```
+```

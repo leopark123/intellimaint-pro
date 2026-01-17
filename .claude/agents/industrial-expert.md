@@ -326,3 +326,78 @@ var channel = Channel.CreateBounded<TelemetryPoint>(
 - [ ] 日志记录充分
 - [ ] 模拟模式可切换
 - [ ] 背压处理到位
+
+## ⚠️ 关键原则：证据驱动协议开发
+
+**核心理念**：所有协议实现必须有连接测试验证，数据采集必须有实际输出证明。
+
+### 开发流程（必须遵守）
+
+```
+协议开发必须完成：
+1. 理解协议 → 明确协议规范和数据类型
+2. 实现代码 → 编写采集器，引用 文件:行号
+3. 连接测试 → 验证能成功连接设备/模拟器
+4. 数据验证 → 确认采集数据格式正确
+5. 性能测试 → 测量采集延迟和吞吐量
+```
+
+### 质量规则
+
+| 维度 | 要求 | 示例 |
+|------|------|------|
+| **连接证据** | 连接测试日志 | `Connected to 192.168.1.100:44818` |
+| **数据证据** | 实际采集输出 | `Tag: Motor_Temp, Value: 65.5` |
+| **性能数据** | 延迟和吞吐量 | `读取延迟: 15ms, 吞吐: 1000 tags/s` |
+| **代码定位** | 精确到文件:行号 | `LibPlcTagCollector.cs:45` |
+
+### ❌ 错误示例（禁止）
+```markdown
+协议开发完成:
+- 实现了 LibPlcTag 采集器   ← 没有连接测试
+- 应该能正常采集           ← 没有数据证据
+```
+
+### ✅ 正确示例（要求）
+```markdown
+## 协议开发报告: LibPlcTag 采集器
+
+### 实现位置
+- **采集器**: `src/Infrastructure/Protocols/LibPlcTag/LibPlcTagCollector.cs:45-120`
+- **连接池**: `LibPlcTagConnectionPool.cs:23-89`
+
+### 连接测试
+```bash
+$ dotnet run --project src/Host.Edge
+[INFO] LibPlcTag: Connecting to SIM-PLC-001 (192.168.1.100:44818)
+[INFO] LibPlcTag: Connection established, PlcType=ControlLogix
+[INFO] LibPlcTag: Health check passed, latency=12ms
+```
+
+### 数据采集验证
+```json
+// 实际采集输出
+{
+  "tagId": 1,
+  "tagName": "Motor_Temperature",
+  "value": 65.5,
+  "quality": "Good",
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+### 性能测试
+| 指标 | 测试值 | 目标值 |
+|------|--------|--------|
+| 单次读取延迟 | 12ms | < 50ms |
+| 批量读取 (100 tags) | 85ms | < 200ms |
+| 吞吐量 | 1176 tags/s | > 500 tags/s |
+
+### 异常处理验证
+```bash
+# 断开网络后
+[WARN] LibPlcTag: Connection lost to SIM-PLC-001
+[INFO] LibPlcTag: Reconnecting... attempt 1/5
+[INFO] LibPlcTag: Reconnected successfully
+```
+```

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
 import type { AuthState, LoginResponse } from '../types/auth'
 import { refreshToken as refreshTokenApi, logout as logoutApi } from '../api/auth'
+import { logError } from '../utils/logger'
 
 const TOKEN_KEY = 'intellimaint_token'
 const REFRESH_TOKEN_KEY = 'intellimaint_refresh_token'
@@ -18,7 +19,7 @@ function loadAuthState(): AuthState {
       }
     }
   } catch (e) {
-    console.error('Failed to load auth state:', e)
+    logError('Failed to load auth state', e, 'AuthStore')
   }
   return {
     token: null,
@@ -46,7 +47,7 @@ function saveAuthState(state: AuthState): void {
       localStorage.removeItem(REFRESH_TOKEN_KEY)
     }
   } catch (e) {
-    console.error('Failed to save auth state:', e)
+    logError('Failed to save auth state', e, 'AuthStore')
   }
 }
 

@@ -508,3 +508,84 @@ ASPNETCORE_ENVIRONMENT=Production
 - [ ] 日志收集
 - [ ] 指标监控
 - [ ] 告警配置
+
+## ⚠️ 关键原则：流程驱动 DevOps
+
+**核心理念**：所有 DevOps 操作必须遵循标准流程，每个阶段有明确检查点。
+
+### 操作流程（必须遵守）
+
+```
+DevOps 操作必须完成：
+1. 预检查 → 环境、依赖、配置验证
+2. 执行操作 → 按步骤执行，记录输出
+3. 验证结果 → 健康检查、功能验证
+4. 记录证据 → 命令输出、日志截取
+5. 回滚准备 → 明确回滚步骤
+```
+
+### 质量规则
+
+| 维度 | 要求 | 示例 |
+|------|------|------|
+| **命令记录** | 完整命令和输出 | `docker build -t xxx:v1 .` + 输出 |
+| **健康验证** | 健康检查结果 | `curl /api/health` 返回 200 |
+| **日志证据** | 关键日志截取 | 启动日志、错误日志 |
+| **回滚方案** | 明确回滚步骤 | 具体命令序列 |
+
+### ❌ 错误示例（禁止）
+```markdown
+部署完成:
+- 镜像已构建          ← 没有构建输出
+- 服务已启动          ← 没有健康检查证据
+```
+
+### ✅ 正确示例（要求）
+```markdown
+## DevOps 操作报告
+
+### 阶段 1: 预检查 ✅
+```bash
+$ docker --version
+Docker version 24.0.5
+
+$ docker-compose --version
+Docker Compose version v2.20.2
+```
+
+### 阶段 2: 构建 ✅
+```bash
+$ docker build -t intellimaint-api:v56 -f Dockerfile.api .
+[+] Building 45.2s (12/12) FINISHED
+ => [build 1/6] FROM mcr.microsoft.com/dotnet/sdk:8.0
+ => [build 6/6] RUN dotnet publish ...
+ => exporting to image
+Successfully built intellimaint-api:v56
+```
+
+### 阶段 3: 部署 ✅
+```bash
+$ docker-compose up -d
+Creating intellimaint-db ... done
+Creating intellimaint-api ... done
+Creating intellimaint-ui ... done
+```
+
+### 阶段 4: 健康验证 ✅
+```bash
+$ curl http://localhost:5000/api/health
+{"status":"healthy","checks":{"database":"healthy","memory_mb":128}}
+
+$ docker ps
+CONTAINER ID   IMAGE                    STATUS
+abc123         intellimaint-api:v56     Up 2 minutes (healthy)
+```
+
+### 阶段 5: 回滚方案
+如需回滚到上一版本:
+```bash
+docker-compose down
+docker tag intellimaint-api:v55 intellimaint-api:latest
+docker-compose up -d
+```
+```

@@ -12,6 +12,7 @@ import {
   Legend
 } from 'recharts'
 import { useNavigate } from 'react-router-dom'
+import { logError } from '../../utils/logger'
 import { getDevices } from '../../api/device'
 import { getAlarmStats, queryAlarms } from '../../api/alarm'
 import { getAllDevicesHealth, type HealthScore } from '../../api/healthAssessment'
@@ -227,7 +228,7 @@ export default function Dashboard() {
       }
       setHealthLoading(false)
     } catch (error) {
-      console.error('加载数据失败:', error)
+      logError('加载数据失败', error, 'Dashboard')
       message.error('加载设备数据失败')
     } finally {
       setMetricsLoading(false)
@@ -304,7 +305,7 @@ export default function Dashboard() {
         // 使用智能切换，根据选中设备订阅
         await telemetrySignalR.switchSubscription(selectedDevice || undefined)
       } catch (err) {
-        console.error('SignalR 连接失败:', err)
+        logError('SignalR 连接失败', err, 'Dashboard')
         setConnected(false)
       }
     }
