@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 
 namespace IntelliMaint.Application.Services;
 
+// Note: ITokenService 已移至 Core.Abstractions.ITokenService
+
 /// <summary>
 /// P1: 认证服务接口 - 集中认证业务逻辑
 /// </summary>
@@ -35,14 +37,6 @@ public sealed record AuthResult
 
     public static AuthResult Succeeded(LoginResponse loginResponse, UserDto user)
         => new() { Success = true, LoginResponse = loginResponse, User = user };
-}
-
-/// <summary>
-/// Token 生成服务接口（由 Infrastructure 实现）
-/// </summary>
-public interface ITokenService
-{
-    (LoginResponse Response, long RefreshExpiresUtc) GenerateTokens(UserDto user);
 }
 
 /// <summary>

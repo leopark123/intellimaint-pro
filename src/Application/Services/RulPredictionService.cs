@@ -135,19 +135,43 @@ public sealed class RulPredictionService : IRulPredictionService
     }
 
     /// <summary>
-    /// 预测所有设备的 RUL
+    /// 预测所有设备的 RUL（优化版：预加载劣化数据避免 N+1 查询）
     /// </summary>
     public async Task<IReadOnlyList<RulPrediction>> PredictAllDevicesRulAsync(
         CancellationToken ct = default)
     {
-        var devices = await _deviceRepo.ListAsync(ct);
+        var config = _options.RulPrediction;
+        if (!config.Enabled)
+        {
+            return Array.Empty<RulPrediction>();
+        }
+
+        // 预加载所有数据，避免 N+1 查询
+        var devicesTask = _deviceRepo.ListAsync(ct);
+        var degradationsTask = _degradationService.DetectAllDevicesDegradationAsync(ct);
+        await Task.WhenAll(devicesTask, degradationsTask);
+
+        var devices = devicesTask.Result;
+        var allDegradations = degradationsTask.Result;
+
+        // 按设备 ID 分组劣化结果
+        var degradationsByDevice = allDegradations
+            .GroupBy(d => d.DeviceId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         var results = new List<RulPrediction>();
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var startTs = now - config.HistoryWindowDays * 24L * 3600 * 1000;
 
         foreach (var device in devices.Where(d => d.Enabled))
         {
             try
             {
-                var prediction = await PredictDeviceRulAsync(device.DeviceId, ct);
+                // 使用内部方法，传入预加载的劣化数据
+                var deviceDegradations = degradationsByDevice.GetValueOrDefault(device.DeviceId)
+                    ?? new List<DegradationResult>();
+                var prediction = await PredictDeviceRulInternalAsync(
+                    device.DeviceId, deviceDegradations, config, startTs, now, ct);
                 if (prediction != null)
                 {
                     results.Add(prediction);
@@ -161,6 +185,112 @@ public sealed class RulPredictionService : IRulPredictionService
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// 内部方法：使用预加载的劣化数据进行 RUL 预测
+    /// </summary>
+    private async Task<RulPrediction?> PredictDeviceRulInternalAsync(
+        string deviceId,
+        List<DegradationResult> degradations,
+        RulPredictionConfig config,
+        long startTs,
+        long now,
+        CancellationToken ct)
+    {
+        // 获取健康指数历史
+        var history = await _snapshotRepo.GetHistoryAsync(deviceId, startTs, now, ct);
+
+        if (history.Count < config.MinDataPoints / 10)
+        {
+            return CreateInsufficientDataResult(deviceId, now);
+        }
+
+        // 提取健康指数序列
+        var healthIndices = history
+            .OrderBy(h => h.Timestamp)
+            .Select(h => (Timestamp: h.Timestamp, Index: h.Index))
+            .ToList();
+
+        int currentIndex = healthIndices.Last().Index;
+
+        if (currentIndex <= config.FailureThreshold)
+        {
+            return CreateNearFailureResult(deviceId, now, currentIndex);
+        }
+
+        var (slope, intercept, rSquared) = CalculateDegradationRate(healthIndices);
+
+        if (slope >= -0.001)
+        {
+            return CreateHealthyResult(deviceId, now, currentIndex, rSquared);
+        }
+
+        double hoursToFailure = (config.FailureThreshold - currentIndex) / slope;
+
+        if (hoursToFailure < 0)
+        {
+            return CreateHealthyResult(deviceId, now, currentIndex, rSquared);
+        }
+
+        double maxHours = config.MaxPredictionDays * 24.0;
+        bool isBeyondMax = hoursToFailure > maxHours;
+
+        double daysToFailure = hoursToFailure / 24.0;
+        double dailyRate = slope * 24;
+
+        var riskLevel = DetermineRiskLevel(daysToFailure);
+        var status = DetermineRulStatus(dailyRate, daysToFailure, rSquared);
+
+        long? predictedFailureTime = isBeyondMax ? null : now + (long)(hoursToFailure * 3600 * 1000);
+        long? recommendedMaintenanceTime = predictedFailureTime.HasValue
+            ? predictedFailureTime.Value - 7 * 24 * 3600 * 1000L
+            : null;
+
+        // 使用预加载的劣化数据获取影响因素
+        var factors = GetInfluencingFactorsFromDegradations(degradations);
+
+        string diagnosticMessage = GenerateDiagnosticMessage(
+            status, daysToFailure, dailyRate, riskLevel, isBeyondMax);
+
+        return new RulPrediction
+        {
+            DeviceId = deviceId,
+            PredictionTimestamp = now,
+            CurrentHealthIndex = currentIndex,
+            RemainingUsefulLifeHours = isBeyondMax ? null : hoursToFailure,
+            RemainingUsefulLifeDays = isBeyondMax ? null : daysToFailure,
+            PredictedFailureTime = predictedFailureTime,
+            Confidence = rSquared,
+            DegradationRate = Math.Abs(dailyRate),
+            ModelType = config.ModelType,
+            Status = status,
+            RiskLevel = riskLevel,
+            RecommendedMaintenanceTime = recommendedMaintenanceTime,
+            DiagnosticMessage = diagnosticMessage,
+            Factors = factors
+        };
+    }
+
+    /// <summary>
+    /// 从预加载的劣化数据获取影响因素
+    /// </summary>
+    private IReadOnlyList<RulFactor> GetInfluencingFactorsFromDegradations(
+        List<DegradationResult> degradations)
+    {
+        return degradations
+            .Where(d => d.IsDegrading)
+            .OrderByDescending(d => Math.Abs(d.DegradationRate))
+            .Take(5)
+            .Select(d => new RulFactor
+            {
+                Name = GetFactorName(d.TagId),
+                TagId = d.TagId,
+                Weight = Math.Min(1.0, Math.Abs(d.DegradationRate) / 5.0),
+                CurrentStatus = d.DegradationType.ToString(),
+                Contribution = -Math.Abs(d.DegradationRate)
+            })
+            .ToList();
     }
 
     /// <summary>

@@ -16,7 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\IntelliMaint.Core.csproj" />
-    <ProjectReference Include="..\..\Application\IntelliMaint.Application.csproj" />
   </ItemGroup>
 
 </Project>

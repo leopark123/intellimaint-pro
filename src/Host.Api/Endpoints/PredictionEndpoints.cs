@@ -1,14 +1,24 @@
 using IntelliMaint.Application.Services;
 using IntelliMaint.Core.Contracts;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace IntelliMaint.Host.Api.Endpoints;
 
 /// <summary>
-/// v63: 预测与预警 API 端点
+/// v63: 预测与预警 API 端点（v56: 添加缓存优化）
 /// </summary>
 public static class PredictionEndpoints
 {
+    // 缓存键常量
+    private const string CacheKeyTrends = "predictions:trends";
+    private const string CacheKeyDegradations = "predictions:degradations";
+    private const string CacheKeyRul = "predictions:rul";
+    private const string CacheKeyAlerts = "predictions:alerts";
+
+    // 缓存过期时间（30秒）
+    private static readonly TimeSpan CacheExpiration = TimeSpan.FromSeconds(30);
+
     public static void MapPredictionEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/predictions")
@@ -58,26 +68,32 @@ public static class PredictionEndpoints
     }
 
     /// <summary>
-    /// 获取所有设备的趋势预测
+    /// 获取所有设备的趋势预测（带缓存）
     /// </summary>
     private static async Task<IResult> GetAllTrendsAsync(
         [FromServices] ITrendPredictionService trendService,
+        [FromServices] IMemoryCache cache,
         CancellationToken ct)
     {
-        var summaries = await trendService.PredictAllDevicesTrendAsync(ct);
-
-        return Results.Ok(new
+        var result = await cache.GetOrCreateAsync(CacheKeyTrends, async entry =>
         {
-            success = true,
-            data = summaries.Select(MapTrendSummaryToDto).ToList(),
-            summary = new
+            entry.AbsoluteExpirationRelativeToNow = CacheExpiration;
+            var summaries = await trendService.PredictAllDevicesTrendAsync(ct);
+            return new
             {
-                totalDevices = summaries.Count,
-                devicesWithAlerts = summaries.Count(s => s.MaxAlertLevel > PredictionAlertLevel.None),
-                criticalAlerts = summaries.Count(s => s.MaxAlertLevel >= PredictionAlertLevel.Critical),
-                highAlerts = summaries.Count(s => s.MaxAlertLevel == PredictionAlertLevel.High)
-            }
+                success = true,
+                data = summaries.Select(MapTrendSummaryToDto).ToList(),
+                summary = new
+                {
+                    totalDevices = summaries.Count,
+                    devicesWithAlerts = summaries.Count(s => s.MaxAlertLevel > PredictionAlertLevel.None),
+                    criticalAlerts = summaries.Count(s => s.MaxAlertLevel >= PredictionAlertLevel.Critical),
+                    highAlerts = summaries.Count(s => s.MaxAlertLevel == PredictionAlertLevel.High)
+                }
+            };
         });
+
+        return Results.Ok(result);
     }
 
     /// <summary>
@@ -103,110 +119,125 @@ public static class PredictionEndpoints
     }
 
     /// <summary>
-    /// 获取所有设备的劣化检测
+    /// 获取所有设备的劣化检测（带缓存）
     /// </summary>
     private static async Task<IResult> GetAllDegradationsAsync(
         [FromServices] IDegradationDetectionService degradationService,
+        [FromServices] IMemoryCache cache,
         CancellationToken ct)
     {
-        var results = await degradationService.DetectAllDevicesDegradationAsync(ct);
-
-        // 按设备分组
-        var byDevice = results.GroupBy(r => r.DeviceId)
-            .Select(g => new
-            {
-                deviceId = g.Key,
-                degradingTags = g.Count(),
-                results = g.Select(MapDegradationToDto).ToList()
-            })
-            .ToList();
-
-        return Results.Ok(new
+        var result = await cache.GetOrCreateAsync(CacheKeyDegradations, async entry =>
         {
-            success = true,
-            data = byDevice,
-            summary = new
-            {
-                totalDevices = byDevice.Count,
-                totalDegradingTags = results.Count,
-                byType = new
+            entry.AbsoluteExpirationRelativeToNow = CacheExpiration;
+            var results = await degradationService.DetectAllDevicesDegradationAsync(ct);
+
+            // 按设备分组
+            var byDevice = results.GroupBy(r => r.DeviceId)
+                .Select(g => new
                 {
-                    gradualIncrease = results.Count(r => r.DegradationType == DegradationType.GradualIncrease),
-                    gradualDecrease = results.Count(r => r.DegradationType == DegradationType.GradualDecrease),
-                    increasingVariance = results.Count(r => r.DegradationType == DegradationType.IncreasingVariance)
+                    deviceId = g.Key,
+                    degradingTags = g.Count(),
+                    results = g.Select(MapDegradationToDto).ToList()
+                })
+                .ToList();
+
+            return new
+            {
+                success = true,
+                data = byDevice,
+                summary = new
+                {
+                    totalDevices = byDevice.Count,
+                    totalDegradingTags = results.Count,
+                    byType = new
+                    {
+                        gradualIncrease = results.Count(r => r.DegradationType == DegradationType.GradualIncrease),
+                        gradualDecrease = results.Count(r => r.DegradationType == DegradationType.GradualDecrease),
+                        increasingVariance = results.Count(r => r.DegradationType == DegradationType.IncreasingVariance)
+                    }
                 }
-            }
+            };
         });
+
+        return Results.Ok(result);
     }
 
     /// <summary>
-    /// 获取所有预警汇总
+    /// 获取所有预警汇总（带缓存）
     /// </summary>
     private static async Task<IResult> GetPredictionAlertsAsync(
         [FromServices] ITrendPredictionService trendService,
         [FromServices] IDegradationDetectionService degradationService,
+        [FromServices] IMemoryCache cache,
         CancellationToken ct)
     {
-        // 并行获取趋势预测和劣化检测
-        var trendTask = trendService.PredictAllDevicesTrendAsync(ct);
-        var degradationTask = degradationService.DetectAllDevicesDegradationAsync(ct);
-
-        await Task.WhenAll(trendTask, degradationTask);
-
-        var trends = trendTask.Result;
-        var degradations = degradationTask.Result;
-
-        // 汇总预警
-        var trendAlerts = trends
-            .SelectMany(t => t.TagPredictions)
-            .Where(p => p.AlertLevel > PredictionAlertLevel.None)
-            .OrderByDescending(p => p.AlertLevel)
-            .ThenBy(p => p.HoursToAlarmThreshold)
-            .Take(20)
-            .Select(p => new
-            {
-                type = "trend",
-                deviceId = p.DeviceId,
-                tagId = p.TagId,
-                level = p.AlertLevel.ToString().ToLower(),
-                levelCode = (int)p.AlertLevel,
-                message = p.AlertMessage,
-                hoursToThreshold = p.HoursToAlarmThreshold,
-                confidence = p.Confidence
-            })
-            .ToList();
-
-        var degradationAlerts = degradations
-            .OrderByDescending(d => Math.Abs(d.DegradationRate))
-            .Take(20)
-            .Select(d => new
-            {
-                type = "degradation",
-                deviceId = d.DeviceId,
-                tagId = d.TagId,
-                degradationType = d.DegradationType.ToString(),
-                rate = d.DegradationRate,
-                changePercent = d.ChangePercent,
-                description = d.Description
-            })
-            .ToList();
-
-        return Results.Ok(new
+        var result = await cache.GetOrCreateAsync(CacheKeyAlerts, async entry =>
         {
-            success = true,
-            data = new
-            {
-                trendAlerts,
-                degradationAlerts,
-                summary = new
+            entry.AbsoluteExpirationRelativeToNow = CacheExpiration;
+
+            // 并行获取趋势预测和劣化检测
+            var trendTask = trendService.PredictAllDevicesTrendAsync(ct);
+            var degradationTask = degradationService.DetectAllDevicesDegradationAsync(ct);
+
+            await Task.WhenAll(trendTask, degradationTask);
+
+            var trends = trendTask.Result;
+            var degradations = degradationTask.Result;
+
+            // 汇总预警
+            var trendAlerts = trends
+                .SelectMany(t => t.TagPredictions)
+                .Where(p => p.AlertLevel > PredictionAlertLevel.None)
+                .OrderByDescending(p => p.AlertLevel)
+                .ThenBy(p => p.HoursToAlarmThreshold)
+                .Take(20)
+                .Select(p => new
                 {
-                    totalTrendAlerts = trendAlerts.Count,
-                    totalDegradationAlerts = degradationAlerts.Count,
-                    criticalCount = trendAlerts.Count(a => a.levelCode >= (int)PredictionAlertLevel.Critical),
-                    highCount = trendAlerts.Count(a => a.levelCode == (int)PredictionAlertLevel.High)
+                    type = "trend",
+                    deviceId = p.DeviceId,
+                    tagId = p.TagId,
+                    level = p.AlertLevel.ToString().ToLower(),
+                    levelCode = (int)p.AlertLevel,
+                    message = p.AlertMessage,
+                    hoursToThreshold = p.HoursToAlarmThreshold,
+                    confidence = p.Confidence
+                })
+                .ToList();
+
+            var degradationAlerts = degradations
+                .OrderByDescending(d => Math.Abs(d.DegradationRate))
+                .Take(20)
+                .Select(d => new
+                {
+                    type = "degradation",
+                    deviceId = d.DeviceId,
+                    tagId = d.TagId,
+                    degradationType = d.DegradationType.ToString(),
+                    rate = d.DegradationRate,
+                    changePercent = d.ChangePercent,
+                    description = d.Description
+                })
+                .ToList();
+
+            return new
+            {
+                success = true,
+                data = new
+                {
+                    trendAlerts,
+                    degradationAlerts,
+                    summary = new
+                    {
+                        totalTrendAlerts = trendAlerts.Count,
+                        totalDegradationAlerts = degradationAlerts.Count,
+                        criticalCount = trendAlerts.Count(a => a.levelCode >= (int)PredictionAlertLevel.Critical),
+                        highCount = trendAlerts.Count(a => a.levelCode == (int)PredictionAlertLevel.High)
+                    }
                 }
-            }
+            };
         });
+
+        return Results.Ok(result);
     }
 
     /// <summary>
@@ -284,48 +315,55 @@ public static class PredictionEndpoints
     }
 
     /// <summary>
-    /// 获取所有设备的 RUL 预测
+    /// 获取所有设备的 RUL 预测（带缓存）
     /// </summary>
     private static async Task<IResult> GetAllRulAsync(
         [FromServices] IRulPredictionService rulService,
+        [FromServices] IMemoryCache cache,
         CancellationToken ct)
     {
-        var predictions = await rulService.PredictAllDevicesRulAsync(ct);
-
-        // 按风险等级分组统计
-        var criticalCount = predictions.Count(p => p.RiskLevel == RulRiskLevel.Critical);
-        var highCount = predictions.Count(p => p.RiskLevel == RulRiskLevel.High);
-        var mediumCount = predictions.Count(p => p.RiskLevel == RulRiskLevel.Medium);
-
-        return Results.Ok(new
+        var result = await cache.GetOrCreateAsync(CacheKeyRul, async entry =>
         {
-            success = true,
-            data = predictions.Select(MapRulPredictionToDto).ToList(),
-            summary = new
+            entry.AbsoluteExpirationRelativeToNow = CacheExpiration;
+            var predictions = await rulService.PredictAllDevicesRulAsync(ct);
+
+            // 按风险等级分组统计
+            var criticalCount = predictions.Count(p => p.RiskLevel == RulRiskLevel.Critical);
+            var highCount = predictions.Count(p => p.RiskLevel == RulRiskLevel.High);
+            var mediumCount = predictions.Count(p => p.RiskLevel == RulRiskLevel.Medium);
+
+            return new
             {
-                totalDevices = predictions.Count,
-                riskDistribution = new
+                success = true,
+                data = predictions.Select(MapRulPredictionToDto).ToList(),
+                summary = new
                 {
-                    critical = criticalCount,
-                    high = highCount,
-                    medium = mediumCount,
-                    low = predictions.Count - criticalCount - highCount - mediumCount
-                },
-                statusDistribution = new
-                {
-                    healthy = predictions.Count(p => p.Status == RulStatus.Healthy),
-                    normalDegradation = predictions.Count(p => p.Status == RulStatus.NormalDegradation),
-                    acceleratedDegradation = predictions.Count(p => p.Status == RulStatus.AcceleratedDegradation),
-                    nearFailure = predictions.Count(p => p.Status == RulStatus.NearFailure),
-                    insufficientData = predictions.Count(p => p.Status == RulStatus.InsufficientData)
-                },
-                averageRulDays = predictions
-                    .Where(p => p.RemainingUsefulLifeDays.HasValue)
-                    .Select(p => p.RemainingUsefulLifeDays!.Value)
-                    .DefaultIfEmpty(0)
-                    .Average()
-            }
+                    totalDevices = predictions.Count,
+                    riskDistribution = new
+                    {
+                        critical = criticalCount,
+                        high = highCount,
+                        medium = mediumCount,
+                        low = predictions.Count - criticalCount - highCount - mediumCount
+                    },
+                    statusDistribution = new
+                    {
+                        healthy = predictions.Count(p => p.Status == RulStatus.Healthy),
+                        normalDegradation = predictions.Count(p => p.Status == RulStatus.NormalDegradation),
+                        acceleratedDegradation = predictions.Count(p => p.Status == RulStatus.AcceleratedDegradation),
+                        nearFailure = predictions.Count(p => p.Status == RulStatus.NearFailure),
+                        insufficientData = predictions.Count(p => p.Status == RulStatus.InsufficientData)
+                    },
+                    averageRulDays = predictions
+                        .Where(p => p.RemainingUsefulLifeDays.HasValue)
+                        .Select(p => p.RemainingUsefulLifeDays!.Value)
+                        .DefaultIfEmpty(0)
+                        .Average()
+                }
+            };
         });
+
+        return Results.Ok(result);
     }
 
     /// <summary>

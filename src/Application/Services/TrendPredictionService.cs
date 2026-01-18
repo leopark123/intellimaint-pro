@@ -97,19 +97,36 @@ public sealed class TrendPredictionService : ITrendPredictionService
     }
 
     /// <summary>
-    /// 预测所有设备的趋势
+    /// 预测所有设备的趋势（优化版：预加载告警规则避免 N+1 查询）
     /// </summary>
     public async Task<IReadOnlyList<DeviceTrendSummary>> PredictAllDevicesTrendAsync(
         CancellationToken ct = default)
     {
-        var devices = await _deviceRepo.ListAsync(ct);
+        var config = _options.TrendPrediction;
+        if (!config.Enabled)
+        {
+            return Array.Empty<DeviceTrendSummary>();
+        }
+
+        // 预加载所有数据，避免 N+1 查询
+        var devicesTask = _deviceRepo.ListAsync(ct);
+        var alarmRulesTask = _alarmRuleRepo.ListEnabledAsync(ct);
+        await Task.WhenAll(devicesTask, alarmRulesTask);
+
+        var devices = devicesTask.Result;
+        var alarmRules = alarmRulesTask.Result;
         var results = new List<DeviceTrendSummary>();
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var startTs = now - config.HistoryWindowHours * 3600 * 1000L;
 
         foreach (var device in devices.Where(d => d.Enabled))
         {
             try
             {
-                var summary = await PredictDeviceTrendAsync(device.DeviceId, ct);
+                // 使用内部方法，传入预加载的告警规则
+                var summary = await PredictDeviceTrendInternalAsync(
+                    device.DeviceId, alarmRules, config, startTs, now, ct);
                 if (summary != null)
                 {
                     results.Add(summary);
@@ -123,6 +140,61 @@ public sealed class TrendPredictionService : ITrendPredictionService
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// 内部方法：使用预加载的告警规则进行趋势预测
+    /// </summary>
+    private async Task<DeviceTrendSummary?> PredictDeviceTrendInternalAsync(
+        string deviceId,
+        IReadOnlyList<AlarmRule> alarmRules,
+        TrendPredictionConfig config,
+        long startTs,
+        long now,
+        CancellationToken ct)
+    {
+        // 获取历史数据
+        var data = await _telemetryRepo.QuerySimpleAsync(
+            deviceId, null, startTs, now, 50000, ct);
+
+        if (data.Count < config.MinDataPoints)
+        {
+            return null;
+        }
+
+        // 按标签分组
+        var tagGroups = data.GroupBy(p => p.TagId).ToList();
+        var predictions = new List<TrendPrediction>();
+
+        foreach (var group in tagGroups)
+        {
+            var tagData = group.OrderBy(p => p.Ts).ToList();
+            if (tagData.Count < 10) continue;
+
+            var prediction = PredictTagTrend(
+                deviceId, group.Key, tagData, alarmRules, config);
+
+            if (prediction != null)
+            {
+                predictions.Add(prediction);
+            }
+        }
+
+        var maxAlert = predictions.Count > 0
+            ? predictions.Max(p => p.AlertLevel)
+            : PredictionAlertLevel.None;
+
+        var riskTags = predictions.Where(p => p.AlertLevel > PredictionAlertLevel.None).ToList();
+
+        return new DeviceTrendSummary
+        {
+            DeviceId = deviceId,
+            Timestamp = now,
+            TagPredictions = predictions,
+            MaxAlertLevel = maxAlert,
+            RiskTagCount = riskTags.Count,
+            RiskSummary = GenerateRiskSummary(riskTags)
+        };
     }
 
     /// <summary>

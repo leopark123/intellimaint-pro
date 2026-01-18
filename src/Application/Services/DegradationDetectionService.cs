@@ -82,19 +82,38 @@ public sealed class DegradationDetectionService : IDegradationDetectionService
     }
 
     /// <summary>
-    /// 检测所有设备的劣化
+    /// 检测所有设备的劣化（优化版：预加载基线避免 N+1 查询）
     /// </summary>
     public async Task<IReadOnlyList<DegradationResult>> DetectAllDevicesDegradationAsync(
         CancellationToken ct = default)
     {
-        var devices = await _deviceRepo.ListAsync(ct);
+        var config = _options.Degradation;
+        if (!config.Enabled)
+        {
+            return Array.Empty<DegradationResult>();
+        }
+
+        // 预加载所有数据，避免 N+1 查询
+        var devicesTask = _deviceRepo.ListAsync(ct);
+        var baselinesTask = _baselineRepo.ListAsync(ct);
+        await Task.WhenAll(devicesTask, baselinesTask);
+
+        var devices = devicesTask.Result;
+        var baselines = baselinesTask.Result;
+        var baselineDict = baselines.ToDictionary(b => b.DeviceId);
+
         var allResults = new List<DegradationResult>();
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var startTs = now - config.DetectionWindowDays * 24 * 3600 * 1000L;
 
         foreach (var device in devices.Where(d => d.Enabled))
         {
             try
             {
-                var results = await DetectDeviceDegradationAsync(device.DeviceId, ct);
+                // 使用内部方法，传入预加载的基线
+                var baseline = baselineDict.GetValueOrDefault(device.DeviceId);
+                var results = await DetectDeviceDegradationInternalAsync(
+                    device.DeviceId, baseline, config, startTs, now, ct);
                 allResults.AddRange(results);
             }
             catch (Exception ex)
@@ -105,6 +124,48 @@ public sealed class DegradationDetectionService : IDegradationDetectionService
         }
 
         return allResults;
+    }
+
+    /// <summary>
+    /// 内部方法：使用预加载的基线进行劣化检测
+    /// </summary>
+    private async Task<IReadOnlyList<DegradationResult>> DetectDeviceDegradationInternalAsync(
+        string deviceId,
+        DeviceBaseline? baseline,
+        DegradationConfig config,
+        long startTs,
+        long now,
+        CancellationToken ct)
+    {
+        var results = new List<DegradationResult>();
+
+        // 获取历史数据
+        var data = await _telemetryRepo.QuerySimpleAsync(
+            deviceId, null, startTs, now, 100000, ct);
+
+        if (data.Count < 100)
+        {
+            return results;
+        }
+
+        // 按标签分组
+        var tagGroups = data.GroupBy(p => p.TagId).ToList();
+
+        foreach (var group in tagGroups)
+        {
+            var tagData = group.OrderBy(p => p.Ts).ToList();
+            if (tagData.Count < 50) continue;
+
+            var tagBaseline = baseline?.TagBaselines.GetValueOrDefault(group.Key);
+            var result = DetectTagDegradation(deviceId, group.Key, tagData, tagBaseline, config);
+
+            if (result != null)
+            {
+                results.Add(result);
+            }
+        }
+
+        return results;
     }
 
     /// <summary>
