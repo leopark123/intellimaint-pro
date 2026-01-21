@@ -290,6 +290,34 @@ public sealed class AlarmRepository : IAlarmRepository
         return (int)Math.Min(count, int.MaxValue);
     }
 
+    public async Task<AlarmStatusCounts> GetStatusCountsAsync(string? deviceId, CancellationToken ct)
+    {
+        var sql = @"
+            SELECT
+                SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) as open_count,
+                SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as acked_count,
+                SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) as closed_count
+            FROM alarm";
+        var parameters = new DynamicParameters();
+
+        if (!string.IsNullOrWhiteSpace(deviceId))
+        {
+            sql += " WHERE device_id = @DeviceId";
+            parameters.Add("DeviceId", deviceId);
+        }
+
+        using var conn = _factory.CreateConnection();
+        var row = await conn.QueryFirstOrDefaultAsync<(long open_count, long acked_count, long closed_count)>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+        return new AlarmStatusCounts
+        {
+            OpenCount = (int)Math.Min(row.open_count, int.MaxValue),
+            AcknowledgedCount = (int)Math.Min(row.acked_count, int.MaxValue),
+            ClosedCount = (int)Math.Min(row.closed_count, int.MaxValue)
+        };
+    }
+
     /// <summary>批量获取设备的未关闭告警数量（优化N+1查询）</summary>
     public async Task<IReadOnlyDictionary<string, int>> GetOpenCountByDevicesAsync(IEnumerable<string> deviceIds, CancellationToken ct)
     {

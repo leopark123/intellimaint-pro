@@ -166,6 +166,8 @@ public interface IAlarmRepository
     Task<IReadOnlyList<AlarmRecord>> GetByIdsAsync(IEnumerable<string> alarmIds, CancellationToken ct);
     Task<PagedResult<AlarmRecord>> QueryAsync(AlarmQuery query, CancellationToken ct);
     Task<int> GetOpenCountAsync(string? deviceId, CancellationToken ct);
+    /// <summary>获取各状态的告警数量</summary>
+    Task<AlarmStatusCounts> GetStatusCountsAsync(string? deviceId, CancellationToken ct);
     /// <summary>批量获取设备的未关闭告警数量（优化N+1查询）</summary>
     Task<IReadOnlyDictionary<string, int>> GetOpenCountByDevicesAsync(IEnumerable<string> deviceIds, CancellationToken ct);
     Task<int> DeleteBeforeAsync(long cutoffTs, CancellationToken ct);
@@ -201,6 +203,16 @@ public sealed record AlarmTrendBucket
     public int OpenCount { get; init; }
     public int CriticalCount { get; init; }
     public int WarningCount { get; init; }
+}
+
+/// <summary>
+/// 告警状态数量统计
+/// </summary>
+public sealed record AlarmStatusCounts
+{
+    public int OpenCount { get; init; }
+    public int AcknowledgedCount { get; init; }
+    public int ClosedCount { get; init; }
 }
 
 /// <summary>

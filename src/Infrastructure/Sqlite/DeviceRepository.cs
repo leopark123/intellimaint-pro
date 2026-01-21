@@ -25,7 +25,7 @@ public sealed class DeviceRepository : IDeviceRepository
     {
         const string sql = @"
 SELECT device_id, name, location, model, protocol, host, port, connection_string,
-       enabled, metadata, created_utc, updated_utc
+       enabled, metadata, created_utc, updated_utc, edge_id
 FROM device
 ORDER BY COALESCE(name, ''), device_id;";
 
@@ -37,7 +37,7 @@ ORDER BY COALESCE(name, ''), device_id;";
     {
         const string sql = @"
 SELECT device_id, name, location, model, protocol, host, port, connection_string,
-       enabled, metadata, created_utc, updated_utc
+       enabled, metadata, created_utc, updated_utc, edge_id
 FROM device
 WHERE device_id = @DeviceId;";
 
@@ -60,8 +60,8 @@ WHERE device_id = @DeviceId;";
         {
             // INSERT
             const string insertSql = @"
-INSERT INTO device (device_id, name, location, model, protocol, host, port, connection_string, enabled, metadata, created_utc, updated_utc)
-VALUES (@DeviceId, @Name, @Location, @Model, @Protocol, @Host, @Port, @ConnectionString, @Enabled, @Metadata, @CreatedUtc, @UpdatedUtc);";
+INSERT INTO device (device_id, name, location, model, protocol, host, port, connection_string, enabled, metadata, edge_id, created_utc, updated_utc)
+VALUES (@DeviceId, @Name, @Location, @Model, @Protocol, @Host, @Port, @ConnectionString, @Enabled, @Metadata, @EdgeId, @CreatedUtc, @UpdatedUtc);";
 
             var createdUtc = device.CreatedUtc > 0 ? device.CreatedUtc : nowUtc;
 
@@ -79,6 +79,7 @@ VALUES (@DeviceId, @Name, @Location, @Model, @Protocol, @Host, @Port, @Connectio
                     device.ConnectionString,
                     Enabled = device.Enabled ? 1 : 0,
                     Metadata = metadataJson,
+                    EdgeId = device.EdgeId,
                     CreatedUtc = createdUtc,
                     UpdatedUtc = nowUtc
                 },
@@ -100,6 +101,7 @@ SET name = @Name,
     connection_string = @ConnectionString,
     enabled = @Enabled,
     metadata = @Metadata,
+    edge_id = @EdgeId,
     updated_utc = @UpdatedUtc
 WHERE device_id = @DeviceId;";
 
@@ -117,6 +119,7 @@ WHERE device_id = @DeviceId;";
                     device.ConnectionString,
                     Enabled = device.Enabled ? 1 : 0,
                     Metadata = metadataJson,
+                    EdgeId = device.EdgeId,
                     UpdatedUtc = nowUtc
                 },
                 ct);
@@ -168,6 +171,7 @@ WHERE device_id = @DeviceId;";
             Host = reader.IsDBNull(reader.GetOrdinal("host")) ? null : reader.GetString(reader.GetOrdinal("host")),
             Port = reader.IsDBNull(reader.GetOrdinal("port")) ? null : reader.GetInt32(reader.GetOrdinal("port")),
             ConnectionString = reader.IsDBNull(reader.GetOrdinal("connection_string")) ? null : reader.GetString(reader.GetOrdinal("connection_string")),
+            EdgeId = reader.IsDBNull(reader.GetOrdinal("edge_id")) ? null : reader.GetString(reader.GetOrdinal("edge_id")),
             Enabled = reader.GetInt64(reader.GetOrdinal("enabled")) == 1,
             CreatedUtc = reader.GetInt64(reader.GetOrdinal("created_utc")),
             UpdatedUtc = reader.GetInt64(reader.GetOrdinal("updated_utc")),

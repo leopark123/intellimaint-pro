@@ -10,12 +10,15 @@ public sealed record DeviceDto
     public string? Location { get; init; }
     public string? Model { get; init; }
     public string? Protocol { get; init; }  // opcua, libplctag, modbus
-    
+
+    /// <summary>所属 Edge 节点 ID</summary>
+    public string? EdgeId { get; init; }
+
     // 连接配置
     public string? Host { get; init; }              // 主机地址，如 localhost 或 192.168.1.100
     public int? Port { get; init; }                 // 端口，如 49320 (KEPServerEX OPC UA)
     public string? ConnectionString { get; init; }  // 完整连接字符串，优先使用（如 opc.tcp://localhost:49320）
-    
+
     public bool Enabled { get; init; } = true;
     public long CreatedUtc { get; init; }
     public long UpdatedUtc { get; init; }

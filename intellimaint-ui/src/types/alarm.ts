@@ -46,6 +46,8 @@ export interface AckAlarmRequest {
 
 export interface AlarmStats {
   openCount: number
+  acknowledgedCount: number
+  closedCount: number
 }
 
 export const SeverityOptions = [

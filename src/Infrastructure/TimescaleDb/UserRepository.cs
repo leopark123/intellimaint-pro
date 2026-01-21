@@ -112,8 +112,8 @@ public sealed class UserRepository : IUserRepository
         var nowUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         const string sql = @"
-            INSERT INTO ""user"" (user_id, username, password_hash, display_name, role, enabled, created_utc, updated_utc)
-            VALUES (@UserId, @Username, @PasswordHash, @DisplayName, @Role, true, @CreatedUtc, @UpdatedUtc)";
+            INSERT INTO ""user"" (user_id, username, password_hash, display_name, role, enabled, created_utc, must_change_password)
+            VALUES (@UserId, @Username, @PasswordHash, @DisplayName, @Role, true, @CreatedUtc, true)";
 
         using var conn = _factory.CreateConnection();
         await conn.ExecuteAsync(new CommandDefinition(sql, new
@@ -123,8 +123,7 @@ public sealed class UserRepository : IUserRepository
             PasswordHash = passwordHash,
             DisplayName = displayName,
             Role = role,
-            CreatedUtc = nowUtc,
-            UpdatedUtc = nowUtc
+            CreatedUtc = nowUtc
         }, cancellationToken: ct));
 
         _logger.LogInformation("Created user {UserId} with username {Username}", userId, username);

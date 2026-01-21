@@ -33,10 +33,10 @@ import {
 import dayjs from 'dayjs'
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { getDevices } from '../../api/device'
-import { ackAlarm, closeAlarm, createAlarm, getAlarmStats, getAlarmGroupStats, getAlarmTrend, queryAlarms } from '../../api/alarm'
+import { ackAlarm, closeAlarm, createAlarm, getAlarmStats, getAlarmTrend, queryAlarms } from '../../api/alarm'
 import { exportAlarmsCsv, exportAlarmsXlsx } from '../../api/export'
 import type { Device } from '../../types/device'
-import type { Alarm, AlarmQuery, AlarmTrendPoint, AlarmGroupStats } from '../../types/alarm'
+import type { Alarm, AlarmQuery, AlarmTrendPoint, AlarmStats } from '../../types/alarm'
 import { SeverityOptions, StatusOptions } from '../../types/alarm'
 import { logError } from '../../utils/logger'
 
@@ -64,7 +64,7 @@ export default function AlarmManagement() {
   const [openCount, setOpenCount] = useState(0)
 
   // v62: 增强的统计和趋势数据
-  const [groupStats, setGroupStats] = useState<AlarmGroupStats>({ openCount: 0, acknowledgedCount: 0, closedCount: 0 })
+  const [alarmStats, setAlarmStats] = useState<AlarmStats>({ openCount: 0, acknowledgedCount: 0, closedCount: 0 })
   const [trendData, setTrendData] = useState<AlarmTrendPoint[]>([])
   const [refreshing, setRefreshing] = useState(false)
 
@@ -103,15 +103,10 @@ export default function AlarmManagement() {
 
   const loadStats = useCallback(async (deviceId?: string) => {
     try {
-      const [statsRes, groupStatsRes] = await Promise.all([
-        getAlarmStats(deviceId),
-        getAlarmGroupStats()
-      ])
+      const statsRes = await getAlarmStats(deviceId)
       if (statsRes.success && statsRes.data) {
         setOpenCount(statsRes.data.openCount ?? 0)
-      }
-      if (groupStatsRes.success && groupStatsRes.data) {
-        setGroupStats(groupStatsRes.data)
+        setAlarmStats(statsRes.data)
       }
     } catch (err) {
       logError('加载统计失败', err, 'AlarmManagement')
@@ -458,9 +453,9 @@ export default function AlarmManagement() {
   ], [doClose, openAckModal, openDetailModal])
 
   // 计算告警统计百分比
-  const totalGroupCount = groupStats.openCount + groupStats.acknowledgedCount + groupStats.closedCount
-  const openPercent = totalGroupCount > 0 ? Math.round((groupStats.openCount / totalGroupCount) * 100) : 0
-  const ackedPercent = totalGroupCount > 0 ? Math.round((groupStats.acknowledgedCount / totalGroupCount) * 100) : 0
+  const totalGroupCount = alarmStats.openCount + alarmStats.acknowledgedCount + alarmStats.closedCount
+  const openPercent = totalGroupCount > 0 ? Math.round((alarmStats.openCount / totalGroupCount) * 100) : 0
+  const ackedPercent = totalGroupCount > 0 ? Math.round((alarmStats.acknowledgedCount / totalGroupCount) * 100) : 0
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -495,7 +490,7 @@ export default function AlarmManagement() {
           <Card>
             <Statistic
               title={<span><AlertOutlined style={{ marginRight: 8, color: '#ff4d4f' }} />未处理告警</span>}
-              value={groupStats.openCount}
+              value={alarmStats.openCount}
               valueStyle={{ color: '#ff4d4f', fontSize: 32 }}
               suffix={<span style={{ fontSize: 14, color: '#999' }}>/ {totalGroupCount}</span>}
             />
@@ -512,7 +507,7 @@ export default function AlarmManagement() {
           <Card>
             <Statistic
               title={<span><ClockCircleOutlined style={{ marginRight: 8, color: '#faad14' }} />已确认</span>}
-              value={groupStats.acknowledgedCount}
+              value={alarmStats.acknowledgedCount}
               valueStyle={{ color: '#faad14', fontSize: 32 }}
               suffix={<span style={{ fontSize: 14, color: '#999' }}>/ {totalGroupCount}</span>}
             />
@@ -529,7 +524,7 @@ export default function AlarmManagement() {
           <Card>
             <Statistic
               title={<span><CheckCircleOutlined style={{ marginRight: 8, color: '#52c41a' }} />已关闭</span>}
-              value={groupStats.closedCount}
+              value={alarmStats.closedCount}
               valueStyle={{ color: '#52c41a', fontSize: 32 }}
             />
           </Card>

@@ -127,7 +127,7 @@ public static class AlarmEndpoints
             MinSeverity = minSeverity,
             StartTs = startTs,
             EndTs = endTs,
-            Limit = limit ?? 100,
+            Limit = limit ?? SystemConstants.Query.DefaultLimit,
             After = token
         };
 
@@ -371,12 +371,17 @@ public static class AlarmEndpoints
         [FromQuery] string? deviceId,
         CancellationToken ct)
     {
-        var openCount = await repo.GetOpenCountAsync(deviceId, ct);
+        var counts = await repo.GetStatusCountsAsync(deviceId, ct);
 
         return Results.Ok(new ApiResponse<AlarmStatsResponse>
         {
             Success = true,
-            Data = new AlarmStatsResponse { OpenCount = openCount },
+            Data = new AlarmStatsResponse
+            {
+                OpenCount = counts.OpenCount,
+                AcknowledgedCount = counts.AcknowledgedCount,
+                ClosedCount = counts.ClosedCount
+            },
             Error = null
         });
     }
@@ -473,7 +478,7 @@ public static class AlarmEndpoints
             MinSeverity = minSeverity,
             StartTs = startTs,
             EndTs = endTs,
-            Limit = limit ?? 50,
+            Limit = limit ?? SystemConstants.Query.DefaultPageSize,
             After = token
         };
 
@@ -702,6 +707,8 @@ public static class AlarmEndpoints
     public sealed record AlarmStatsResponse
     {
         public int OpenCount { get; init; }
+        public int AcknowledgedCount { get; init; }
+        public int ClosedCount { get; init; }
     }
 
     public sealed record AlarmGroupStatsResponse

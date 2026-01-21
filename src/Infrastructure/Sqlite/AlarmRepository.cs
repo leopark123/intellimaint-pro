@@ -284,6 +284,37 @@ WHERE status = 0";
         return (int)Math.Min(count, int.MaxValue);
     }
 
+    public async Task<AlarmStatusCounts> GetStatusCountsAsync(string? deviceId, CancellationToken ct)
+    {
+        var sql = @"
+SELECT
+    SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) as open_count,
+    SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as acked_count,
+    SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) as closed_count
+FROM alarm";
+
+        object parameters;
+
+        if (!string.IsNullOrWhiteSpace(deviceId))
+        {
+            sql += " WHERE device_id = @DeviceId";
+            parameters = new { DeviceId = deviceId };
+        }
+        else
+        {
+            parameters = new { };
+        }
+
+        var result = await _db.QuerySingleAsync(sql, reader => new AlarmStatusCounts
+        {
+            OpenCount = (int)Math.Min(reader.IsDBNull(0) ? 0 : reader.GetInt64(0), int.MaxValue),
+            AcknowledgedCount = (int)Math.Min(reader.IsDBNull(1) ? 0 : reader.GetInt64(1), int.MaxValue),
+            ClosedCount = (int)Math.Min(reader.IsDBNull(2) ? 0 : reader.GetInt64(2), int.MaxValue)
+        }, parameters, ct);
+
+        return result ?? new AlarmStatusCounts();
+    }
+
     /// <summary>批量获取设备的未关闭告警数量（优化N+1查询）</summary>
     public async Task<IReadOnlyDictionary<string, int>> GetOpenCountByDevicesAsync(IEnumerable<string> deviceIds, CancellationToken ct)
     {

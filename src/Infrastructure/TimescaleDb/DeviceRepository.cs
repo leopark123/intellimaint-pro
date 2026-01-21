@@ -25,7 +25,7 @@ public sealed class DeviceRepository : IDeviceRepository
     {
         const string sql = @"
             SELECT device_id, name, location, protocol, host, port, connection_string,
-                   enabled, created_utc, updated_utc, status, description
+                   enabled, created_utc, updated_utc, status, description, edge_id
             FROM device
             ORDER BY COALESCE(name, ''), device_id";
 
@@ -38,7 +38,7 @@ public sealed class DeviceRepository : IDeviceRepository
     {
         const string sql = @"
             SELECT device_id, name, location, protocol, host, port, connection_string,
-                   enabled, created_utc, updated_utc, status, description
+                   enabled, created_utc, updated_utc, status, description, edge_id
             FROM device
             WHERE device_id = @DeviceId";
 
@@ -58,9 +58,9 @@ public sealed class DeviceRepository : IDeviceRepository
         // PostgreSQL: INSERT ... ON CONFLICT DO UPDATE
         const string sql = @"
             INSERT INTO device (device_id, name, location, protocol, host, port,
-                               connection_string, enabled, status, description, created_utc, updated_utc)
+                               connection_string, enabled, status, description, edge_id, created_utc, updated_utc)
             VALUES (@DeviceId, @Name, @Location, @Protocol, @Host, @Port,
-                    @ConnectionString, @Enabled, @Status, @Description, @CreatedUtc, @UpdatedUtc)
+                    @ConnectionString, @Enabled, @Status, @Description, @EdgeId, @CreatedUtc, @UpdatedUtc)
             ON CONFLICT (device_id) DO UPDATE SET
                 name = EXCLUDED.name,
                 location = EXCLUDED.location,
@@ -71,6 +71,7 @@ public sealed class DeviceRepository : IDeviceRepository
                 enabled = EXCLUDED.enabled,
                 status = EXCLUDED.status,
                 description = EXCLUDED.description,
+                edge_id = EXCLUDED.edge_id,
                 updated_utc = EXCLUDED.updated_utc";
 
         using var conn = _factory.CreateConnection();
@@ -86,6 +87,7 @@ public sealed class DeviceRepository : IDeviceRepository
             device.Enabled,
             Status = "Unknown",
             Description = (string?)null,
+            EdgeId = device.EdgeId,
             CreatedUtc = device.CreatedUtc > 0 ? device.CreatedUtc : nowUtc,
             UpdatedUtc = nowUtc
         }, cancellationToken: ct));
@@ -110,6 +112,7 @@ public sealed class DeviceRepository : IDeviceRepository
         Host = row.host,
         Port = row.port,
         ConnectionString = row.connection_string,
+        EdgeId = row.edge_id,
         Enabled = row.enabled,
         CreatedUtc = row.created_utc,
         UpdatedUtc = row.updated_utc
@@ -125,6 +128,7 @@ public sealed class DeviceRepository : IDeviceRepository
         public string? host { get; set; }
         public int? port { get; set; }
         public string? connection_string { get; set; }
+        public string? edge_id { get; set; }
         public bool enabled { get; set; }
         public long created_utc { get; set; }
         public long updated_utc { get; set; }
