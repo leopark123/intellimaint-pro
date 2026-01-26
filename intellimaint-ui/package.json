@@ -12,7 +12,7 @@
     "prepare": "cd .. && git config core.hooksPath .husky"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.3.7",
+    "@ant-design/icons": "^6.1.0",
     "@microsoft/signalr": "^8.0.7",
     "antd": "^5.20.0",
     "axios": "^1.7.7",
