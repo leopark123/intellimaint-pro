@@ -30,6 +30,7 @@
     <ProjectReference Include="..\..\src\Infrastructure\Sqlite\IntelliMaint.Infrastructure.Sqlite.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\Pipeline\IntelliMaint.Infrastructure.Pipeline.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\Security\IntelliMaint.Infrastructure.Security.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\TimescaleDb\IntelliMaint.Infrastructure.TimescaleDb.csproj" />
     <ProjectReference Include="..\..\src\Host.Api\IntelliMaint.Host.Api.csproj" />
   </ItemGroup>
 

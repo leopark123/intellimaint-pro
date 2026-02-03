@@ -218,20 +218,22 @@ export default function LoginPage() {
           </Form.Item>
         </Form>
 
-        {/* 提示信息 */}
-        <div style={{ 
-          textAlign: 'center',
-          padding: '16px 0 0',
-          borderTop: '1px solid var(--color-border)'
-        }}>
-          <p style={{ 
-            fontSize: 13, 
-            color: 'var(--color-text-dim)',
-            margin: 0
+        {/* 提示信息 - 仅开发环境显示默认账户 */}
+        {import.meta.env.DEV && (
+          <div style={{
+            textAlign: 'center',
+            padding: '16px 0 0',
+            borderTop: '1px solid var(--color-border)'
           }}>
-            默认账户：<span style={{ color: 'var(--color-text-muted)' }}>admin</span> / <span style={{ color: 'var(--color-text-muted)' }}>admin123</span>
-          </p>
-        </div>
+            <p style={{
+              fontSize: 13,
+              color: 'var(--color-text-dim)',
+              margin: 0
+            }}>
+              默认账户：<span style={{ color: 'var(--color-text-muted)' }}>admin</span> / <span style={{ color: 'var(--color-text-muted)' }}>admin123</span>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 版本信息 */}

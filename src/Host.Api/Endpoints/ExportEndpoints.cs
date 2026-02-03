@@ -39,30 +39,35 @@ public static class ExportEndpoints
         [FromQuery] long? startTs,
         [FromQuery] long? endTs,
         [FromQuery] int? limit,
+        HttpContext httpContext,
         CancellationToken ct)
     {
         try
         {
-            var maxLimit = Math.Min(limit ?? 10000, 100000);
+            var maxLimit = Math.Min(limit ?? SystemConstants.Export.DefaultLimit, SystemConstants.Export.MaxLimit);
             var points = await repo.QuerySimpleAsync(deviceId, tagId, startTs, endTs, maxLimit, ct);
 
-            var sb = new StringBuilder();
-            // BOM for Excel UTF-8 compatibility
-            sb.Append('\uFEFF');
-            // Header
-            sb.AppendLine("DeviceId,TagId,Timestamp,Value,ValueType,Quality,Unit");
-
-            foreach (var p in points)
-            {
-                var ts = DateTimeOffset.FromUnixTimeMilliseconds(p.Ts).ToString("yyyy-MM-dd HH:mm:ss.fff");
-                var value = ExtractValue(p)?.ToString() ?? "";
-                sb.AppendLine($"{Escape(p.DeviceId)},{Escape(p.TagId)},{ts},{Escape(value)},{p.ValueType},{p.Quality},{Escape(p.Unit ?? "")}");
-            }
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
             var fileName = $"telemetry_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
 
-            return Results.File(bytes, "text/csv; charset=utf-8", fileName);
+            // 流式输出：避免全量加载到内存
+            return Results.Stream(async stream =>
+            {
+                await using var writer = new StreamWriter(stream, Encoding.UTF8, bufferSize: 8192, leaveOpen: true);
+
+                // BOM for Excel UTF-8 compatibility
+                await writer.WriteAsync("\uFEFF");
+                // Header
+                await writer.WriteLineAsync("DeviceId,TagId,Timestamp,Value,ValueType,Quality,Unit");
+
+                foreach (var p in points)
+                {
+                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(p.Ts).ToString("yyyy-MM-dd HH:mm:ss.fff");
+                    var value = ExtractValue(p)?.ToString() ?? "";
+                    await writer.WriteLineAsync($"{Escape(p.DeviceId)},{Escape(p.TagId)},{ts},{Escape(value)},{p.ValueType},{p.Quality},{Escape(p.Unit ?? "")}");
+                }
+
+                await writer.FlushAsync(ct);
+            }, contentType: "text/csv; charset=utf-8", fileDownloadName: fileName);
         }
         catch (Exception ex)
         {
@@ -82,7 +87,7 @@ public static class ExportEndpoints
     {
         try
         {
-            var maxLimit = Math.Min(limit ?? 10000, 100000);
+            var maxLimit = Math.Min(limit ?? SystemConstants.Export.DefaultLimit, SystemConstants.Export.MaxLimit);
             var points = await repo.QuerySimpleAsync(deviceId, tagId, startTs, endTs, maxLimit, ct);
 
             using var workbook = new XLWorkbook();
@@ -145,7 +150,7 @@ public static class ExportEndpoints
     {
         try
         {
-            var maxLimit = Math.Min(limit ?? 10000, 100000);
+            var maxLimit = Math.Min(limit ?? SystemConstants.Export.DefaultLimit, SystemConstants.Export.MaxLimit);
             var query = new AlarmQuery
             {
                 DeviceId = deviceId,
@@ -158,24 +163,28 @@ public static class ExportEndpoints
 
             var result = await repo.QueryAsync(query, ct);
 
-            var sb = new StringBuilder();
-            sb.Append('\uFEFF');
-            sb.AppendLine("AlarmId,DeviceId,TagId,Timestamp,Severity,Code,Message,Status,AckedBy,AckedTime,AckNote");
-
-            foreach (var a in result.Items)
-            {
-                var ts = DateTimeOffset.FromUnixTimeMilliseconds(a.Ts).ToString("yyyy-MM-dd HH:mm:ss");
-                var ackedTime = a.AckedUtc.HasValue
-                    ? DateTimeOffset.FromUnixTimeMilliseconds(a.AckedUtc.Value).ToString("yyyy-MM-dd HH:mm:ss")
-                    : "";
-                
-                sb.AppendLine($"{Escape(a.AlarmId)},{Escape(a.DeviceId)},{Escape(a.TagId ?? "")},{ts},{a.Severity},{Escape(a.Code)},{Escape(a.Message)},{a.Status},{Escape(a.AckedBy ?? "")},{ackedTime},{Escape(a.AckNote ?? "")}");
-            }
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
             var fileName = $"alarms_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
 
-            return Results.File(bytes, "text/csv; charset=utf-8", fileName);
+            // 流式输出：避免全量加载到内存
+            return Results.Stream(async stream =>
+            {
+                await using var writer = new StreamWriter(stream, Encoding.UTF8, bufferSize: 8192, leaveOpen: true);
+
+                await writer.WriteAsync("\uFEFF");
+                await writer.WriteLineAsync("AlarmId,DeviceId,TagId,Timestamp,Severity,Code,Message,Status,AckedBy,AckedTime,AckNote");
+
+                foreach (var a in result.Items)
+                {
+                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(a.Ts).ToString("yyyy-MM-dd HH:mm:ss");
+                    var ackedTime = a.AckedUtc.HasValue
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(a.AckedUtc.Value).ToString("yyyy-MM-dd HH:mm:ss")
+                        : "";
+
+                    await writer.WriteLineAsync($"{Escape(a.AlarmId)},{Escape(a.DeviceId)},{Escape(a.TagId ?? "")},{ts},{a.Severity},{Escape(a.Code)},{Escape(a.Message)},{a.Status},{Escape(a.AckedBy ?? "")},{ackedTime},{Escape(a.AckNote ?? "")}");
+                }
+
+                await writer.FlushAsync(ct);
+            }, contentType: "text/csv; charset=utf-8", fileDownloadName: fileName);
         }
         catch (Exception ex)
         {
@@ -196,7 +205,7 @@ public static class ExportEndpoints
     {
         try
         {
-            var maxLimit = Math.Min(limit ?? 10000, 100000);
+            var maxLimit = Math.Min(limit ?? SystemConstants.Export.DefaultLimit, SystemConstants.Export.MaxLimit);
             var query = new AlarmQuery
             {
                 DeviceId = deviceId,

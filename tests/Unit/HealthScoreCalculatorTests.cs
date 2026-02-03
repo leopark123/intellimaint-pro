@@ -26,7 +26,7 @@ public class HealthScoreCalculatorTests
 
         var options = new HealthAssessmentOptions
         {
-            Weights = new HealthWeights
+            Weights = new ScoreWeights
             {
                 Deviation = 0.35,
                 Trend = 0.25,
@@ -37,10 +37,9 @@ public class HealthScoreCalculatorTests
             {
                 HealthyMin = 85,
                 AttentionMin = 70,
-                WarningMin = 50,
-                CriticalMin = 0
+                WarningMin = 50
             },
-            DefaultTagImportance = TagImportance.Normal
+            DefaultTagImportance = TagImportance.Minor
         };
         _options = Options.Create(options);
 
@@ -56,12 +55,12 @@ public class HealthScoreCalculatorTests
         // Arrange
         var features = CreateDeviceFeatures("Device1", new Dictionary<string, TagFeatures>
         {
-            ["Tag1"] = new() { Mean = 100, StdDev = 5, TrendSlope = 0.1 }
+            ["Tag1"] = new() { TagId = "Tag1", Mean = 100, StdDev = 5, TrendSlope = 0.1 }
         });
 
         _importanceMatcherMock
             .Setup(m => m.GetImportances(It.IsAny<IEnumerable<string>>()))
-            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Normal });
+            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Minor });
 
         // Act
         var result = _calculator.Calculate(features, null);
@@ -81,6 +80,7 @@ public class HealthScoreCalculatorTests
         {
             ["Tag1"] = new()
             {
+                TagId = "Tag1",
                 Mean = 100,
                 StdDev = 2,
                 TrendSlope = 0.01,
@@ -106,7 +106,7 @@ public class HealthScoreCalculatorTests
 
         _importanceMatcherMock
             .Setup(m => m.GetImportances(It.IsAny<IEnumerable<string>>()))
-            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Normal });
+            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Minor });
 
         // Act
         var result = _calculator.Calculate(features, baseline);
@@ -126,6 +126,7 @@ public class HealthScoreCalculatorTests
         {
             ["Tag1"] = new()
             {
+                TagId = "Tag1",
                 Mean = 130, // Deviated from baseline
                 StdDev = 2,
                 TrendSlope = 0.01,
@@ -170,6 +171,7 @@ public class HealthScoreCalculatorTests
         {
             ["CriticalTag"] = new()
             {
+                TagId = "CriticalTag",
                 Mean = 112, // Z-Score = 2.4 (above critical threshold of 2.0)
                 StdDev = 2,
                 TrendSlope = 0,
@@ -178,6 +180,7 @@ public class HealthScoreCalculatorTests
             },
             ["NormalTag"] = new()
             {
+                TagId = "NormalTag",
                 Mean = 112, // Same deviation but normal tag
                 StdDev = 2,
                 TrendSlope = 0,
@@ -201,7 +204,7 @@ public class HealthScoreCalculatorTests
             .Returns(new Dictionary<string, TagImportance>
             {
                 ["CriticalTag"] = TagImportance.Critical,
-                ["NormalTag"] = TagImportance.Normal
+                ["NormalTag"] = TagImportance.Minor
             });
 
         // Act
@@ -220,6 +223,7 @@ public class HealthScoreCalculatorTests
         {
             ["Tag1"] = new()
             {
+                TagId = "Tag1",
                 Mean = 100,
                 StdDev = 2,
                 TrendSlope = 2.0, // Strong upward trend
@@ -239,7 +243,7 @@ public class HealthScoreCalculatorTests
 
         _importanceMatcherMock
             .Setup(m => m.GetImportances(It.IsAny<IEnumerable<string>>()))
-            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Normal });
+            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Minor });
 
         // Act
         var result = _calculator.Calculate(features, baseline);
@@ -256,6 +260,7 @@ public class HealthScoreCalculatorTests
         {
             ["Tag1"] = new()
             {
+                TagId = "Tag1",
                 Mean = 100,
                 StdDev = 20,
                 TrendSlope = 0,
@@ -275,7 +280,7 @@ public class HealthScoreCalculatorTests
 
         _importanceMatcherMock
             .Setup(m => m.GetImportances(It.IsAny<IEnumerable<string>>()))
-            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Normal });
+            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Minor });
 
         // Act
         var result = _calculator.Calculate(features, baseline);
@@ -333,6 +338,7 @@ public class HealthScoreCalculatorTests
         {
             ["Tag1"] = new()
             {
+                TagId = "Tag1",
                 Mean = double.NaN,
                 StdDev = 2,
                 TrendSlope = 0,
@@ -352,7 +358,7 @@ public class HealthScoreCalculatorTests
 
         _importanceMatcherMock
             .Setup(m => m.GetImportances(It.IsAny<IEnumerable<string>>()))
-            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Normal });
+            .Returns(new Dictionary<string, TagImportance> { ["Tag1"] = TagImportance.Minor });
 
         // Act
         var result = _calculator.Calculate(features, baseline);
@@ -370,6 +376,7 @@ public class HealthScoreCalculatorTests
         {
             ["Tag1"] = new()
             {
+                TagId = "Tag1",
                 Mean = 1000, // 极端偏离 (Z-Score = 180)
                 StdDev = 2,
                 TrendSlope = 0,
@@ -426,6 +433,7 @@ public class HealthScoreCalculatorTests
         {
             ["LowPriorityTag"] = new()
             {
+                TagId = "LowPriorityTag",
                 Mean = 120,
                 StdDev = 2,
                 TrendSlope = 0,
@@ -434,6 +442,7 @@ public class HealthScoreCalculatorTests
             },
             ["CriticalTag"] = new()
             {
+                TagId = "CriticalTag",
                 Mean = 115,
                 StdDev = 2,
                 TrendSlope = 0,
@@ -516,7 +525,7 @@ public class AlarmScoreCalculatorTests
         var config = CreateDefaultConfig();
         var alarms = new List<AlarmRecord>
         {
-            new() { Id = 1, Severity = 5, Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }
+            new() { AlarmId = "a1", DeviceId = "d1", Severity = 5, Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Code = "C001", Message = "Critical alarm" }
         };
 
         var score = AlarmScoreCalculator.CalculateAlarmScore(alarms, config);
@@ -532,10 +541,10 @@ public class AlarmScoreCalculatorTests
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var alarms = new List<AlarmRecord>
         {
-            new() { Id = 1, Severity = 5, Ts = now }, // Critical
-            new() { Id = 2, Severity = 3, Ts = now }, // Error
-            new() { Id = 3, Severity = 2, Ts = now }, // Warning
-            new() { Id = 4, Severity = 1, Ts = now }  // Info
+            new() { AlarmId = "a1", DeviceId = "d1", Severity = 5, Ts = now, Code = "C001", Message = "Critical" },
+            new() { AlarmId = "a2", DeviceId = "d1", Severity = 3, Ts = now, Code = "E001", Message = "Error" },
+            new() { AlarmId = "a3", DeviceId = "d1", Severity = 2, Ts = now, Code = "W001", Message = "Warning" },
+            new() { AlarmId = "a4", DeviceId = "d1", Severity = 1, Ts = now, Code = "I001", Message = "Info" }
         };
 
         var score = AlarmScoreCalculator.CalculateAlarmScore(alarms, config);
@@ -563,7 +572,7 @@ public class AlarmScoreCalculatorTests
         var oneHourAgo = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds();
         var alarms = new List<AlarmRecord>
         {
-            new() { Id = 1, Severity = 3, Ts = oneHourAgo } // Error, 1 hour old
+            new() { AlarmId = "a1", DeviceId = "d1", Severity = 3, Ts = oneHourAgo, Code = "E001", Message = "Error" } // Error, 1 hour old
         };
 
         var score = AlarmScoreCalculator.CalculateAlarmScore(alarms, config);
@@ -580,7 +589,7 @@ public class AlarmScoreCalculatorTests
 
         // Create many critical alarms
         var alarms = Enumerable.Range(1, 20)
-            .Select(i => new AlarmRecord { Id = i, Severity = 5, Ts = now })
+            .Select(i => new AlarmRecord { AlarmId = $"a{i}", DeviceId = "d1", Severity = 5, Ts = now, Code = "C001", Message = "Critical" })
             .ToList();
 
         var score = AlarmScoreCalculator.CalculateAlarmScore(alarms, config);

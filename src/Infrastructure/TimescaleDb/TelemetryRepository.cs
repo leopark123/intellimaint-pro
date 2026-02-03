@@ -23,40 +23,77 @@ public sealed class TelemetryRepository : ITelemetryRepository
     {
         if (batch.Count == 0) return 0;
 
-        // PostgreSQL: INSERT ... ON CONFLICT DO NOTHING
-        const string sql = @"
-            INSERT INTO telemetry (
-                device_id, tag_id, ts, seq, value_type,
-                bool_value, int32_value, int64_value, float32_value, float64_value,
-                string_value, quality
-            ) VALUES (
-                @DeviceId, @TagId, @Ts, @Seq, @ValueType,
-                @BoolValue, @Int32Value, @Int64Value, @Float32Value, @Float64Value,
-                @StringValue, @Quality
-            )
-            ON CONFLICT (device_id, tag_id, ts, seq) DO NOTHING";
-
-        var parametersList = batch.Select(p => new
-        {
-            p.DeviceId,
-            p.TagId,
-            p.Ts,
-            p.Seq,
-            ValueType = (int)p.ValueType,
-            p.BoolValue,
-            p.Int32Value,
-            p.Int64Value,
-            p.Float32Value,
-            p.Float64Value,
-            p.StringValue,
-            p.Quality
-        });
-
         try
         {
             using var conn = _factory.CreateConnection();
-            var affected = await conn.ExecuteAsync(new CommandDefinition(sql, parametersList, cancellationToken: ct));
-            _logger.LogDebug("Appended {Count} telemetry points", affected);
+
+            // 使用 COPY 协议批量写入临时表，再 INSERT ... ON CONFLICT
+            // COPY 协议比逐条 INSERT 快 5-10 倍
+            const string tempTable = "telemetry_staging";
+
+            // 创建临时表（会话结束自动删除）
+            await conn.ExecuteAsync(new CommandDefinition($@"
+                CREATE TEMP TABLE IF NOT EXISTS {tempTable} (
+                    device_id TEXT, tag_id TEXT, ts BIGINT, seq BIGINT, value_type INT,
+                    bool_value BOOLEAN, int32_value INT, int64_value BIGINT,
+                    float32_value REAL, float64_value DOUBLE PRECISION,
+                    string_value TEXT, quality INT
+                ) ON COMMIT DELETE ROWS", cancellationToken: ct));
+
+            // 清空临时表（防止残留数据）
+            await conn.ExecuteAsync(new CommandDefinition(
+                $"TRUNCATE {tempTable}", cancellationToken: ct));
+
+            // COPY 二进制导入到临时表
+            using (var writer = conn.BeginBinaryImport(
+                $"COPY {tempTable} (device_id, tag_id, ts, seq, value_type, bool_value, int32_value, int64_value, float32_value, float64_value, string_value, quality) FROM STDIN (FORMAT BINARY)"))
+            {
+                foreach (var p in batch)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    writer.StartRow();
+                    writer.Write(p.DeviceId, NpgsqlTypes.NpgsqlDbType.Text);
+                    writer.Write(p.TagId, NpgsqlTypes.NpgsqlDbType.Text);
+                    writer.Write(p.Ts, NpgsqlTypes.NpgsqlDbType.Bigint);
+                    writer.Write(p.Seq, NpgsqlTypes.NpgsqlDbType.Bigint);
+                    writer.Write((int)p.ValueType, NpgsqlTypes.NpgsqlDbType.Integer);
+
+                    if (p.BoolValue.HasValue) writer.Write(p.BoolValue.Value, NpgsqlTypes.NpgsqlDbType.Boolean);
+                    else writer.WriteNull();
+
+                    if (p.Int32Value.HasValue) writer.Write(p.Int32Value.Value, NpgsqlTypes.NpgsqlDbType.Integer);
+                    else writer.WriteNull();
+
+                    if (p.Int64Value.HasValue) writer.Write(p.Int64Value.Value, NpgsqlTypes.NpgsqlDbType.Bigint);
+                    else writer.WriteNull();
+
+                    if (p.Float32Value.HasValue) writer.Write(p.Float32Value.Value, NpgsqlTypes.NpgsqlDbType.Real);
+                    else writer.WriteNull();
+
+                    if (p.Float64Value.HasValue) writer.Write(p.Float64Value.Value, NpgsqlTypes.NpgsqlDbType.Double);
+                    else writer.WriteNull();
+
+                    if (p.StringValue != null) writer.Write(p.StringValue, NpgsqlTypes.NpgsqlDbType.Text);
+                    else writer.WriteNull();
+
+                    writer.Write(p.Quality, NpgsqlTypes.NpgsqlDbType.Integer);
+                }
+
+                await writer.CompleteAsync(ct);
+            }
+
+            // 从临时表合并到正式表（ON CONFLICT 去重）
+            var affected = await conn.ExecuteAsync(new CommandDefinition($@"
+                INSERT INTO telemetry (device_id, tag_id, ts, seq, value_type,
+                    bool_value, int32_value, int64_value, float32_value, float64_value,
+                    string_value, quality)
+                SELECT device_id, tag_id, ts, seq, value_type,
+                    bool_value, int32_value, int64_value, float32_value, float64_value,
+                    string_value, quality
+                FROM {tempTable}
+                ON CONFLICT (device_id, tag_id, ts, seq) DO NOTHING", cancellationToken: ct));
+
+            _logger.LogDebug("COPY appended {Count} telemetry points ({Affected} new)", batch.Count, affected);
             return affected;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -66,7 +103,7 @@ public sealed class TelemetryRepository : ITelemetryRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to append {Count} telemetry points", batch.Count);
+            _logger.LogError(ex, "Failed to COPY append {Count} telemetry points", batch.Count);
             throw;
         }
     }

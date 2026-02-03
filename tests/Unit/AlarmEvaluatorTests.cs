@@ -120,7 +120,8 @@ public class AlarmEvaluatorTests
             DeviceId = "Device1",
             Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ValueType = TagValueType.Float32,
-            FloatValue = 123.45f
+            Seq = 0,
+            Float32Value = 123.45f
         };
 
         var result = TryGetNumericValueHelper(point, out var value);
@@ -138,7 +139,8 @@ public class AlarmEvaluatorTests
             DeviceId = "Device1",
             Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ValueType = TagValueType.Float64,
-            DoubleValue = 123.456789
+            Seq = 0,
+            Float64Value = 123.456789
         };
 
         var result = TryGetNumericValueHelper(point, out var value);
@@ -156,7 +158,8 @@ public class AlarmEvaluatorTests
             DeviceId = "Device1",
             Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ValueType = TagValueType.Int32,
-            IntValue = 42
+            Seq = 0,
+            Int32Value = 42
         };
 
         var result = TryGetNumericValueHelper(point, out var value);
@@ -174,6 +177,7 @@ public class AlarmEvaluatorTests
             DeviceId = "Device1",
             Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ValueType = TagValueType.Bool,
+            Seq = 0,
             BoolValue = true
         };
 
@@ -191,6 +195,7 @@ public class AlarmEvaluatorTests
             TagId = "Tag1",
             DeviceId = "Device1",
             Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Seq = 0,
             ValueType = TagValueType.Bool,
             BoolValue = false
         };
@@ -210,6 +215,7 @@ public class AlarmEvaluatorTests
             DeviceId = "Device1",
             Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ValueType = TagValueType.String,
+            Seq = 0,
             StringValue = "not a number"
         };
 
@@ -228,7 +234,8 @@ public class AlarmEvaluatorTests
             DeviceId = "Device1",
             Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             ValueType = TagValueType.Float32,
-            FloatValue = null
+            Seq = 0,
+            Float32Value = null
         };
 
         var result = TryGetNumericValueHelper(point, out var value);
@@ -312,9 +319,15 @@ public class AlarmEvaluatorTests
             MessageTemplate = "Alert: {tagId} is {cond} {threshold}, current={value}"
         };
 
-        var point = CreatePoint("Tag1", "Device1");
-        point.FloatValue = 85.5f;
-        point.ValueType = TagValueType.Float32;
+        var point = new TelemetryPoint
+        {
+            TagId = "Tag1",
+            DeviceId = "Device1",
+            Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Seq = 0,
+            ValueType = TagValueType.Float32,
+            Float32Value = 85.5f
+        };
 
         var message = BuildMessageHelper(rule, point, 85.5);
 
@@ -378,33 +391,33 @@ public class AlarmEvaluatorTests
                 return false;
 
             case TagValueType.Int32:
-                if (point.IntValue.HasValue)
+                if (point.Int32Value.HasValue)
                 {
-                    value = point.IntValue.Value;
+                    value = point.Int32Value.Value;
                     return true;
                 }
                 return false;
 
             case TagValueType.Int64:
-                if (point.LongValue.HasValue)
+                if (point.Int64Value.HasValue)
                 {
-                    value = point.LongValue.Value;
+                    value = point.Int64Value.Value;
                     return true;
                 }
                 return false;
 
             case TagValueType.Float32:
-                if (point.FloatValue.HasValue)
+                if (point.Float32Value.HasValue)
                 {
-                    value = point.FloatValue.Value;
+                    value = point.Float32Value.Value;
                     return true;
                 }
                 return false;
 
             case TagValueType.Float64:
-                if (point.DoubleValue.HasValue)
+                if (point.Float64Value.HasValue)
                 {
-                    value = point.DoubleValue.Value;
+                    value = point.Float64Value.Value;
                     return true;
                 }
                 return false;
@@ -467,8 +480,9 @@ public class AlarmEvaluatorTests
             TagId = tagId,
             DeviceId = deviceId,
             Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Seq = 0,
             ValueType = TagValueType.Float32,
-            FloatValue = 105.0f
+            Float32Value = 105.0f
         };
     }
 

@@ -34,6 +34,9 @@ public static class SystemConstants
         /// <summary>默认查询限制</summary>
         public const int DefaultLimit = 100;
 
+        /// <summary>默认分页大小（较小）</summary>
+        public const int DefaultPageSize = 50;
+
         /// <summary>最大查询限制</summary>
         public const int MaxLimit = 1000;
 
@@ -42,6 +45,18 @@ public static class SystemConstants
 
         /// <summary>最大时间范围（小时）</summary>
         public const int MaxHoursRange = 168; // 7天
+    }
+
+    /// <summary>
+    /// 导出相关常量
+    /// </summary>
+    public static class Export
+    {
+        /// <summary>默认导出限制</summary>
+        public const int DefaultLimit = 10000;
+
+        /// <summary>最大导出限制</summary>
+        public const int MaxLimit = 100000;
     }
 
     /// <summary>

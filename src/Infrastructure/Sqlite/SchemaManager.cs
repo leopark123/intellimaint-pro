@@ -1358,6 +1358,16 @@ CREATE TABLE IF NOT EXISTS device_baseline (
         ";
         await ExecuteAsync(conn, createEdgeStatus, ct);
 
+        // 4. device 表增加 edge_id 字段（关联 Edge 节点）
+        try
+        {
+            await ExecuteAsync(conn, "ALTER TABLE device ADD COLUMN edge_id TEXT;", ct);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 1)
+        {
+            _logger.LogDebug("Column edge_id already exists, skipping");
+        }
+
         var appliedUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await ExecuteAsync(conn,
             $"INSERT OR REPLACE INTO schema_version (version, applied_utc) VALUES (21, {appliedUtc});",
@@ -1400,6 +1410,7 @@ public static class SchemaV1
             connection_string TEXT,
             enabled INTEGER NOT NULL DEFAULT 1,
             metadata TEXT,
+            edge_id TEXT,
             created_utc INTEGER NOT NULL,
             updated_utc INTEGER NOT NULL
         );

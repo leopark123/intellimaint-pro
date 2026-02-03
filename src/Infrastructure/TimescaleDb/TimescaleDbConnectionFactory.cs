@@ -8,8 +8,11 @@ namespace IntelliMaint.Infrastructure.TimescaleDb;
 /// </summary>
 public interface INpgsqlConnectionFactory
 {
-    /// <summary>创建并打开一个新的数据库连接</summary>
+    /// <summary>创建并打开一个新的数据库连接（同步，兼容现有代码）</summary>
     NpgsqlConnection CreateConnection();
+
+    /// <summary>创建并异步打开一个新的数据库连接（推荐）</summary>
+    Task<NpgsqlConnection> CreateConnectionAsync(CancellationToken ct = default);
 
     /// <summary>获取连接字符串</summary>
     string ConnectionString { get; }
@@ -49,10 +52,23 @@ public sealed class TimescaleDbConnectionFactory : INpgsqlConnectionFactory
 
     public string ConnectionString => _connectionString;
 
+    /// <summary>
+    /// 同步创建连接（兼容现有代码）
+    /// </summary>
     public NpgsqlConnection CreateConnection()
     {
         var conn = new NpgsqlConnection(_connectionString);
         conn.Open();
+        return conn;
+    }
+
+    /// <summary>
+    /// 异步创建连接（推荐 - 不阻塞线程池）
+    /// </summary>
+    public async Task<NpgsqlConnection> CreateConnectionAsync(CancellationToken ct = default)
+    {
+        var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
         return conn;
     }
 }

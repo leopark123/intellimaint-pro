@@ -46,7 +46,7 @@ public static class AuditLogEndpoints
             UserId = userId,
             StartTs = startTs,
             EndTs = endTs,
-            Limit = limit ?? 50,
+            Limit = limit ?? SystemConstants.Query.DefaultPageSize,
             Offset = offset ?? 0
         };
 
