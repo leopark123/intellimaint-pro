@@ -1,7 +1,7 @@
 # Codex for Open Source — application draft
 
-**Not submitted.** Prepared 2026-09-16 from baseline `759ba66` and local, uncommitted OSS changes.
-Do not describe those changes as public until the maintainer reviews and publishes them.
+**Not submitted.** Updated 2026-09-17 after publishing the OSS-readiness changes to `main` at `d380902`.
+The current public GitHub Hosted CI run for that commit passed backend, frontend and Docker demo jobs.
 
 Official reference checked: [Codex for Open Source](https://developers.openai.com/community/codex-for-oss).
 The program considers maintainers and project/ecosystem importance; this draft does not establish
@@ -23,10 +23,10 @@ application field has that exact limit.
    synthetic entry point and openly documented protocol boundaries can help engineers and contributors
    inspect acquisition, storage and monitoring workflows. This is a proposed community benefit, not proof
    of widespread usage, critical-infrastructure adoption or ecosystem dependence.
-5. **Current repository activity:** Baseline/main HEAD ancestry contains 15 commits; all locally
-   reachable refs during the audit contain 28 commits. No tags were present. Main HEAD is `759ba66`,
-   dated 2026-02-03. This preparation adds local changes that are not yet
-   published. No Issue/PR, contributor, Star, download or release counts were inferred or manufactured.
+5. **Current repository activity:** Public `main` currently contains 17 commits and points to `d380902`.
+   The OSS-readiness changes are published, and GitHub Hosted CI passed backend, frontend and Docker
+   demo jobs for that commit. At review time the repository had 0 stars and 0 forks; no download,
+   external-user or release counts are inferred or manufactured.
 6. **Actual usage evidence:** No independently verifiable external users, organizations, customers,
    deployments, revenue or field benchmarks were supplied. Local synthetic demo/test results demonstrate
    reproducibility, not external adoption. The applicant should provide consented public links to actual
@@ -45,7 +45,7 @@ application field has that exact limit.
 - **仓库与维护者：** 使用上述真实仓库链接；申请人需自行补充真实身份、职责及权限证明，不能从 GitHub 用户名推断。
 - **项目定位：** 这是 pre-1.0 工业遥测与状态监测代码库。合成 Demo 可复现，不等于真实 PLC 兼容认证或生产部署证明。
 - **生态价值：** 无硬件开发入口、协议边界说明和可重复测试可能降低参与门槛；这是价值主张，不能写成已获广泛采用。
-- **活动与使用：** 基线/main HEAD 祖先链为 15 个提交；审计时所有本地可达引用合计 28 个提交，无 tag。主分支最新提交日期已核对。尚无可核实外部用户/客户/部署证据，必须如实留空或说明。
+- **活动与使用：** 当前公开 `main` 为 17 个提交，HEAD=`d380902`；Hosted CI 的后端、前端和 Docker Demo 作业已通过。审查时仓库为 0 stars / 0 forks，尚无可核实外部用户、客户或部署证据，必须如实说明。
 - **Codex 用途：** 问题复现、代码审查、回归测试、安全审查、文档及发布准备；生产控制与安全逻辑由人工审核及现场验证。
 - **API credits：** 仅是获批后的维护自动化设想。未调用 API、未产生申请结果，也不承诺奖励额度或资格。
 
@@ -74,7 +74,7 @@ Character count (including spaces/punctuation): **437 / 500**.
 ## Before copying into the application
 
 - Supply the actual applicant/maintainer identity and public role evidence.
-- Reference published commit facda5 and the passing Hosted CI/Docker result.
+- Reference published commits `bfacda5` / `d380902` and the passing Hosted CI/Docker result.
 - Confirm license/ownership and a private security-reporting route.
 - Add only genuine usage/activity links; do not create artificial activity for the application.
 - Recheck the current form, eligibility and field limits. Submission is a separate human action.
