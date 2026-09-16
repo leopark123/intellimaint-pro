@@ -16,8 +16,8 @@ application field has that exact limit.
    authority. The repository owner path is visible; the applicant's identity or ownership is not inferred.
 3. **Project description:** IntelliMaint Pro is a pre-1.0 .NET 8 and React/TypeScript project for industrial
    telemetry and condition monitoring. Source includes REST/SignalR, authentication, alarms, heuristic
-   health assessment, historical trends and FFT calculation. A labelled synthetic SQLite motor demo has
-   been prepared and tested locally. Protocol interoperability, TimescaleDB parity and predictive accuracy
+   health assessment, historical trends and FFT calculation. A labelled synthetic SQLite motor demo is
+   published and has been validated locally and in GitHub Hosted CI/Docker. Protocol interoperability, TimescaleDB parity and predictive accuracy
    have explicit validation limits documented in the feature matrix.
 4. **Ecosystem importance:** Industrial integrations often require unavailable hardware. A reproducible
    synthetic entry point and openly documented protocol boundaries can help engineers and contributors
@@ -61,9 +61,9 @@ Character count (including spaces/punctuation): **446 / 500**.
 
 ### Version B — Ecosystem
 
-Industrial monitoring projects are difficult to evaluate without PLC access. IntelliMaint Pro has a public .NET/React codebase and a locally prepared, labelled hardware-free motor demo. It exposes implementation and validation limits for OPC UA, Allen-Bradley, analytics and storage. Codex could help make contributions reproducible and improve protocol fixtures, security reviews and documentation. External usage evidence has not yet been established.
+Industrial monitoring projects are difficult to evaluate without PLC access. IntelliMaint Pro has a public .NET/React codebase and a published, labelled hardware-free motor demo. It exposes implementation and validation limits for OPC UA, Allen-Bradley, analytics and storage. Codex could help make contributions reproducible and improve protocol fixtures, security reviews and documentation. External usage evidence has not yet been established.
 
-Character count (including spaces/punctuation): **453 / 500**.
+Character count (including spaces/punctuation): **446 / 500**.
 
 ### Version C — Maintainer workload
 
@@ -74,7 +74,7 @@ Character count (including spaces/punctuation): **437 / 500**.
 ## Before copying into the application
 
 - Supply the actual applicant/maintainer identity and public role evidence.
-- Review and publish the intended changes; attach the exact commit and passing Hosted CI/Docker result.
+- Reference published commit facda5 and the passing Hosted CI/Docker result.
 - Confirm license/ownership and a private security-reporting route.
 - Add only genuine usage/activity links; do not create artificial activity for the application.
 - Recheck the current form, eligibility and field limits. Submission is a separate human action.
