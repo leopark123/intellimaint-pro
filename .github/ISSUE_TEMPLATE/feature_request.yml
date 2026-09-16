@@ -1,0 +1,24 @@
+name: Feature request
+description: Propose a concrete use case with an evidence-based acceptance test.
+title: "feat: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and use case
+      description: Explain who would use it without disclosing customer or plant information.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal and alternatives
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Acceptance test and safety considerations
+      description: Prefer a hardware-free test; identify control/safety impact and required human lab validation.
+    validations:
+      required: true

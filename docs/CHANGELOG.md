@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro 变更日志
 
 ## v45 (2025-12-30) - 健康评估引擎
@@ -216,7 +218,7 @@ ALTER TABLE user ADD COLUMN refresh_token_expires_utc INTEGER;
 - 前端登录页面
 - 受保护路由
 
-**默认账号**: admin / admin123
+**默认账号**: admin / [removed legacy password]
 
 ---
 

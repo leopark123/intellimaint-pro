@@ -1,3 +1,5 @@
+> Historical API note: may contain stale routes or payloads. Use the running Development Swagger and the source-backed [API index](README.md). Not production or accuracy evidence.
+
 # 遥测数据 API
 
 ## 查询历史数据

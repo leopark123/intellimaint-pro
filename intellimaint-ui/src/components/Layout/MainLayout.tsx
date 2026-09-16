@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Dropdown, Avatar, Badge, message, Tooltip, Switch } from 'antd'
+import { Layout, Menu, Dropdown, Avatar, message, Tooltip, Switch } from 'antd'
 import {
   LayoutDashboard,
   LineChart,
@@ -305,15 +305,15 @@ export default function MainLayout() {
               padding: 12
             }}>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
-                系统状态
+                项目阶段
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div className="status-dot online" />
-                <span style={{ fontSize: 14, color: 'var(--color-text-primary)' }}>正常运行</span>
+                <span style={{ fontSize: 14, color: 'var(--color-text-primary)' }}>pre-1.0</span>
               </div>
             </div>
           ) : (
-            <Tooltip title="系统正常运行" placement="right">
+            <Tooltip title="项目阶段：pre-1.0" placement="right">
               <div style={{
                 width: 40,
                 height: 40,
@@ -378,7 +378,7 @@ export default function MainLayout() {
                 color: 'var(--color-text-primary)',
                 margin: 0
               }}>
-                工业AI预测性维护系统
+                工业遥测与设备状态监测
               </h1>
             </div>
             
@@ -391,7 +391,7 @@ export default function MainLayout() {
               borderRadius: 20,
               fontWeight: 500
             }}>
-              V2.0
+              pre-1.0
             </span>
           </div>
 
@@ -425,7 +425,7 @@ export default function MainLayout() {
             </Tooltip>
 
             {/* 通知按钮 */}
-            <Badge count={3} size="small">
+            <>
               <div
                 style={{
                   width: 40,
@@ -443,7 +443,7 @@ export default function MainLayout() {
               >
                 <Bell size={20} color="var(--color-text-muted)" />
               </div>
-            </Badge>
+            </>
 
             {/* 设置按钮 */}
             <div
@@ -496,7 +496,8 @@ export default function MainLayout() {
           minHeight: 'calc(100vh - 64px)',
           background: 'var(--color-bg-darker)'
         }}>
-          <Outlet />
+          {import.meta.env.VITE_DEMO_MODE === "true" && <div role="status" style={{ padding: 12, background: "#fff3cd", color: "#664d03" }}>Synthetic Demo Data — 合成电机数据，不代表现场设备。</div>}
+      <Outlet />
         </Content>
       </Layout>
     </Layout>

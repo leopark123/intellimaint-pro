@@ -1,3 +1,4 @@
+import SyntheticNotice from "../../components/SyntheticNotice"
 import { Network, BookOpen, Lightbulb, Search } from 'lucide-react'
 import { Input, Button, Progress } from 'antd'
 import {
@@ -27,6 +28,7 @@ export default function KnowledgeGraph() {
 
   return (
     <div>
+      <SyntheticNotice />
       {/* 页面标题 */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 8px 0' }}>

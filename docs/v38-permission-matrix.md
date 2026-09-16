@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro v38 - 角色权限矩阵
 
 ## 角色定义
@@ -75,7 +77,7 @@
 # 登录获取 Token
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"viewer","password":"viewer123"}'
+  -d '{"username":"viewer","password":"[removed legacy password]"}'
 
 # 可以：查看遥测
 curl http://localhost:5000/api/telemetry/latest \
@@ -122,19 +124,10 @@ curl -X PUT http://localhost:5000/api/settings/retention.telemetry.days \
 
 ## 创建测试用户
 
-需要在数据库中添加不同角色的用户：
+历史文档曾提供可复制的固定密码哈希 INSERT，现已移除。不要直接写入用户表或复用历史哈希。
 
-```sql
--- Operator 用户
-INSERT INTO user (user_id, username, password_hash, role, display_name, enabled, created_utc)
-VALUES ('op-001', 'operator', 'JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=', 'Operator', 'Operator User', 1, 1735520000000);
-
--- Viewer 用户
-INSERT INTO user (user_id, username, password_hash, role, display_name, enabled, created_utc)
-VALUES ('vw-001', 'viewer', 'JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=', 'Viewer', 'Viewer User', 1, 1735520000000);
-```
-
-**注意**: 上述密码哈希对应密码 `admin123`，实际使用时应修改。
+空数据库通过显式 ADMIN_USERNAME / ADMIN_PASSWORD 初始化首个管理员；其他角色由管理员通过已认证的用户管理 API 创建，并使用各自唯一的密码。
+迁移中用于识别旧默认凭据并要求改密的安全逻辑仍须保留。
 
 ---
 

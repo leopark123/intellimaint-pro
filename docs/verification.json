@@ -1,0 +1,69 @@
+{
+  "date": "2026-09-16",
+  "baseline_commit": "759ba66",
+  "scope": "local uncommitted OSS preparation",
+  "environment": {
+    "os": "Windows x64",
+    "dotnet_sdk": "8.0.425",
+    "node": "24.19.0",
+    "npm": "12.0.2"
+  },
+  "backend": {
+    "restore": "pass",
+    "build": "pass",
+    "warnings": 2,
+    "unit_passed": 147,
+    "integration_passed": 41,
+    "failed": 0,
+    "skipped": 0,
+    "migration_build": "pass",
+    "api_publish": "pass"
+  },
+  "frontend": {
+    "clean_install": "pass",
+    "typecheck": "pass",
+    "lint": "pass",
+    "tests_passed": 2,
+    "build": "pass",
+    "audit_vulnerabilities": 0
+  },
+  "security": {
+    "nuget_reported_vulnerable_packages": 0,
+    "native_sqlite": "3.53.3",
+    "known_legacy_tokens_removed_from_working_tree": true,
+    "history_rewritten": false,
+    "external_credentials_rotated": false,
+    "request_log_redaction_regression": "pass; actual authenticated SignalR negotiation with captured application logs",
+    "legacy_hash_rotation_migration": "preserved; unchanged in remediation",
+    "existing_log_files_scrubbed": false
+  },
+  "demo": {
+    "http_smoke": "pass",
+    "browser_dashboard": "pass",
+    "data": "Synthetic Demo Data",
+    "real_plc_contacted": false
+  },
+  "validation": {
+    "actionlint": "pass",
+    "yaml_files": 10,
+    "mermaid_diagrams": 1,
+    "relative_markdown_links": "pass",
+    "compose_configurations": 3,
+    "docker_runtime": "not run; no engine",
+    "hosted_ci": "not run; no push"
+  },
+  "published": false,
+  "application_submitted": false,
+  "history": {
+    "baseline_main_ancestry_commits": 15,
+    "all_locally_reachable_commits_at_audit": 28,
+    "tags": 0
+  },
+  "remediation": {
+    "scope": "confirmed pre-commit findings only",
+    "backend_trx": "tests/*/TestResults/remediation.trx",
+    "tests_removed_or_skipped": false,
+    "industrial_algorithms_or_control_changed": false,
+    "historical_secret_references_in_current_docs_removed": true
+  }
+}

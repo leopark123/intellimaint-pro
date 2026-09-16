@@ -6,9 +6,10 @@ Write-Host ""
 
 # 1. Get Token
 Write-Host "1. Login and get token..." -ForegroundColor Yellow
-$loginResult = Invoke-RestMethod -Uri "$baseUrl/api/auth/login" -Method POST -ContentType 'application/json' -Body '{"username":"admin","password":"admin123"}'
+$loginResult = Invoke-RestMethod -Uri "$baseUrl/api/auth/login" -Method POST -ContentType 'application/json' -Body (@{ username = $env:ADMIN_USERNAME; password = $env:ADMIN_PASSWORD } | ConvertTo-Json -Compress)
 $token = $loginResult.data.token
-Write-Host "   Token: $($token.Substring(0, 30))..." -ForegroundColor Green
+if ([string]::IsNullOrWhiteSpace($token)) { throw "Authentication failed: no access credential returned" }
+Write-Host "   Authentication succeeded" -ForegroundColor Green
 $headers = @{Authorization="Bearer $token"}
 
 # 2. Test Devices API

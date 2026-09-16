@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro 变更日志
 
 ## v51 (2025-01-01) - UI 深度优化

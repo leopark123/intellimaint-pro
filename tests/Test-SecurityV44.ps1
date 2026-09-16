@@ -16,8 +16,8 @@
 
 param(
     [string]$BaseUrl = "http://localhost:5000",
-    [string]$Username = "admin",
-    [string]$Password = "admin123"
+    [string]$Username = $env:ADMIN_USERNAME,
+    [string]$Password = $env:ADMIN_PASSWORD
 )
 
 $ErrorActionPreference = "Stop"

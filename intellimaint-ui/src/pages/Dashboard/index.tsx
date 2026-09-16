@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Select, Empty, message, Skeleton } from 'antd'
-import { Activity, AlertTriangle, Wrench, TrendingUp, Thermometer, Zap, Heart, RefreshCw, Cpu, ChevronRight } from 'lucide-react'
+import { Activity, AlertTriangle, TrendingUp, Thermometer, Zap, Heart, RefreshCw, Cpu, ChevronRight } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -368,10 +368,9 @@ export default function Dashboard() {
 
   // 指标卡片数据
   const metrics = [
-    { icon: Activity, title: '在线设备', value: statistics.onlineCount, unit: '台', trend: 0, color: 'primary' as const },
-    { icon: AlertTriangle, title: '活动警报', value: openAlarmCount, unit: '条', trend: 0, color: 'warning' as const },
-    { icon: Wrench, title: '待处理工单', value: 0, unit: '个', trend: 0, color: 'success' as const },
-    { icon: TrendingUp, title: '系统健康度', value: statistics.avgHealth, unit: '%', trend: 0, color: 'success' as const }
+    { icon: Activity, title: '在线设备', value: statistics.onlineCount, unit: '台', color: 'primary' as const },
+    { icon: AlertTriangle, title: '活动警报', value: openAlarmCount, unit: '条', color: 'warning' as const },
+    { icon: TrendingUp, title: '系统健康度', value: statistics.avgHealth, unit: '%', color: 'success' as const }
   ]
 
   return (
@@ -422,13 +421,13 @@ export default function Dashboard() {
       {/* 指标卡片 */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
+        gridTemplateColumns: 'repeat(3, 1fr)',
         gap: 24,
         marginBottom: 24
       }}>
         {metricsLoading ? (
           // 骨架屏加载状态
-          [1, 2, 3, 4].map(i => <MetricCardSkeleton key={i} />)
+          [1, 2, 3].map(i => <MetricCardSkeleton key={i} />)
         ) : (
           metrics.map((metric, idx) => {
             const Icon = metric.icon
@@ -458,16 +457,6 @@ export default function Dashboard() {
                   <div style={{ padding: 12, background: colors.iconBg, borderRadius: 10 }}>
                     <Icon size={24} color={colors.iconColor} />
                   </div>
-                  <span style={{
-                    fontSize: 12,
-                    padding: '4px 10px',
-                    borderRadius: 20,
-                    background: metric.trend >= 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                    color: metric.trend >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-                    fontWeight: 500
-                  }}>
-                    {metric.trend >= 0 ? '↑' : '↓'} {Math.abs(metric.trend)}%
-                  </span>
                 </div>
                 <h3 style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 8, fontWeight: 400 }}>{metric.title}</h3>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>

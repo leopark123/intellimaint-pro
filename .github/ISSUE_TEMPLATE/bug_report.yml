@@ -1,0 +1,32 @@
+name: Bug report
+description: Report a reproducible software problem using sanitized evidence.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, follow SECURITY.md. Never attach passwords, tokens, private certificates or plant data."
+  - type: input
+    id: revision
+    attributes:
+      label: Revision and environment
+      description: Commit, OS, .NET/Node versions, SQLite or TimescaleDB; synthetic or authorized lab data.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Prefer the hardware-free demo or a minimal fixture.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized logs and test results
+      description: Include protocol/server versions only if relevant; remove identifying network details and secrets.

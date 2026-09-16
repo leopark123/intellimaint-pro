@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace IntelliMaint.Tests.Integration;
 
@@ -18,17 +19,27 @@ public class ApiTestFixture : WebApplicationFactory<Program>
         _dbPath = Path.Combine(Path.GetTempPath(), $"intellimaint_test_{Guid.NewGuid():N}.db");
     }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    protected override IHost CreateHost(IHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration((context, config) =>
+        // Host configuration is available to minimal Program before service registration.
+        builder.ConfigureHostConfiguration(config =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["DatabaseProvider"] = "Sqlite",
+                ["Demo:Enabled"] = "false",
+                ["Jwt:SecretKey"] = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+                ["ADMIN_USERNAME"] = "test_admin",
+                ["ADMIN_PASSWORD"] = Guid.NewGuid().ToString("N") + "aA1!",
                 ["Edge:DatabasePath"] = _dbPath,  // Fixed: EdgeOptions uses "Edge" section
                 ["Edge:EdgeId"] = "test-edge"     // Required property
             });
         });
+        return base.CreateHost(builder);
+    }
 
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
         builder.UseEnvironment("Testing");
 
         // Configure test authentication to bypass JWT

@@ -9,7 +9,7 @@ public sealed record TelemetryQueryRequest
     public string? TagId { get; init; }
     public long? StartTs { get; init; }     // Unix 毫秒
     public long? EndTs { get; init; }       // Unix 毫秒
-    public int Limit { get; init; } = 1000; // 默认 1000，最大 10000
+    public int? Limit { get; init; } = 1000; // Optional query parameter; default 1000, maximum 10000.
     
     // v48: 游标分页支持
     public long? CursorTs { get; init; }    // 游标时间戳（上一页最后一条的 ts）

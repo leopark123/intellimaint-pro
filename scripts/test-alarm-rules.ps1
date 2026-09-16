@@ -1,5 +1,5 @@
 $baseUrl = "http://localhost:5000"
-$loginResult = Invoke-RestMethod -Uri "$baseUrl/api/auth/login" -Method POST -ContentType 'application/json' -Body '{"username":"admin","password":"admin123"}'
+$loginResult = Invoke-RestMethod -Uri "$baseUrl/api/auth/login" -Method POST -ContentType 'application/json' -Body (@{ username = $env:ADMIN_USERNAME; password = $env:ADMIN_PASSWORD } | ConvertTo-Json -Compress)
 $token = $loginResult.data.token
 $headers = @{Authorization="Bearer $token"}
 

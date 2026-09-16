@@ -2,6 +2,7 @@
 """Motor fault prediction system - Demo data initialization script (stdlib only)"""
 
 import json
+import os
 import urllib.request
 import urllib.error
 import time
@@ -31,9 +32,11 @@ def api_request(method, endpoint, data=None, token=None):
 def main():
     # 1. Login
     print("=== 1. Login ===")
-    status, resp = api_request("POST", "/auth/login", {"username": "admin", "password": "admin123"})
+    status, resp = api_request("POST", "/auth/login", {"username": os.environ["ADMIN_USERNAME"], "password": os.environ["ADMIN_PASSWORD"]})
     token = resp["data"]["token"]
-    print(f"Token obtained: {token[:50]}...")
+    if not token:
+        raise RuntimeError("Authentication failed: no access credential returned")
+    print("Authentication succeeded")
 
     # 2. Create Motor Models
     print("\n=== 2. Create Motor Models ===")

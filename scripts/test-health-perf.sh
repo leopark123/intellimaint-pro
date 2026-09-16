@@ -1,5 +1,5 @@
 #!/bin/bash
-TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6ImFkbWluMDAwMDAwMDAwMSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL25hbWUiOiJhZG1pbiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFkbWluIiwiZGlzcGxheV9uYW1lIjoiQWRtaW5pc3RyYXRvciIsImV4cCI6MTc2NzU3NDQ4NSwiaXNzIjoiSW50ZWxsaU1haW50IiwiYXVkIjoiSW50ZWxsaU1haW50In0.zwLs7k6DdaggxQZNAfyl5RVOSfmTz8F5onEt0M1WIRo"
+TOKEN="${ACCESS_TOKEN:?Set ACCESS_TOKEN to a local short-lived token}"
 BASE_URL="http://localhost:5000/api/health-assessment"
 
 echo "=== 健康评估 API 性能测试 (10次请求) ==="

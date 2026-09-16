@@ -4,8 +4,8 @@ $ErrorActionPreference = "Continue"
 
 # Login
 $loginBody = @{
-    username = "admin"
-    password = "admin123"
+    username = $env:ADMIN_USERNAME
+    password = $env:ADMIN_PASSWORD
 } | ConvertTo-Json
 
 Write-Host "=== 1. Login ===" -ForegroundColor Cyan

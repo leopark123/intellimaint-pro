@@ -1,6 +1,7 @@
-$loginResult = Invoke-RestMethod -Uri 'http://localhost:5000/api/auth/login' -Method POST -ContentType 'application/json' -Body '{"username":"admin","password":"admin123"}'
+$loginResult = Invoke-RestMethod -Uri 'http://localhost:5000/api/auth/login' -Method POST -ContentType 'application/json' -Body (@{ username = $env:ADMIN_USERNAME; password = $env:ADMIN_PASSWORD } | ConvertTo-Json -Compress)
 $token = $loginResult.data.token
-Write-Host "Token obtained: $($token.Substring(0, 30))..."
+if ([string]::IsNullOrWhiteSpace($token)) { throw "Authentication failed: no access credential returned" }
+Write-Host "Authentication succeeded"
 
 $headers = @{Authorization="Bearer $token"}
 $result = Invoke-RestMethod -Uri 'http://localhost:5000/api/telemetry/tags' -Headers $headers

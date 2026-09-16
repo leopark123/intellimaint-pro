@@ -33,15 +33,7 @@ public sealed class JwtService : ITokenService
         _logger = logger;
         var jwtSection = configuration.GetSection("Jwt");
 
-        // v56.1: 优先从环境变量读取密钥，增强安全性验证
-        var envKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
-        var configKey = jwtSection["SecretKey"];
-
-        _secretKey = envKey ?? configKey
-            ?? throw new InvalidOperationException("JWT_SECRET_KEY environment variable or Jwt:SecretKey config is required");
-
-        // v56.1: 验证密钥强度
-        ValidateSecretKey(_secretKey, envKey != null);
+        _secretKey = ResolveSecretKey(configuration);
 
         _issuer = jwtSection["Issuer"] ?? "IntelliMaint";
         _audience = jwtSection["Audience"] ?? "IntelliMaint";
@@ -52,35 +44,13 @@ public sealed class JwtService : ITokenService
     /// <summary>
     /// v56.1: 验证密钥强度，生产环境必须使用安全密钥
     /// </summary>
-    private void ValidateSecretKey(string key, bool fromEnvironment)
+    public static string ResolveSecretKey(IConfiguration configuration)
     {
-        if (key.Length < MinSecretKeyLength)
-        {
-            throw new InvalidOperationException(
-                $"JWT secret key must be at least {MinSecretKeyLength} characters. Current: {key.Length}");
-        }
-
-        // 检查是否使用默认不安全密钥
-        if (key.StartsWith(DefaultInsecureKeyPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            var isDevelopment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
-            if (isDevelopment)
-            {
-                _logger?.LogWarning(
-                    "[Security] Using default JWT key in Development. Set JWT_SECRET_KEY env var for production!");
-            }
-            else
-            {
-                throw new InvalidOperationException(
-                    "Default JWT secret key detected in non-Development environment. " +
-                    "Set JWT_SECRET_KEY environment variable with a secure random key (64+ chars recommended).");
-            }
-        }
-        else if (!fromEnvironment)
-        {
-            _logger?.LogWarning(
-                "[Security] JWT key loaded from config file. Consider using JWT_SECRET_KEY environment variable.");
-        }
+        var key = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? configuration["Jwt:SecretKey"];
+        if (string.IsNullOrWhiteSpace(key) || key.Length < MinSecretKeyLength ||
+            key.StartsWith(DefaultInsecureKeyPrefix, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Set JWT_SECRET_KEY to a unique random secret of at least 32 characters.");
+        return key;
     }
 
     /// <summary>

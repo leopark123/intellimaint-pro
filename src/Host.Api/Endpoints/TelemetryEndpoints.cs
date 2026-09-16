@@ -33,6 +33,7 @@ public static class TelemetryEndpoints
         // 诊断端点
         group.MapGet("/debug", DebugAsync)
             .WithName("DebugTelemetry")
+            .RequireAuthorization(AuthPolicies.AdminOnly)
             .WithDescription("诊断信息");
     }
     
@@ -77,7 +78,7 @@ public static class TelemetryEndpoints
         [AsParameters] TelemetryQueryRequest req,
         CancellationToken ct)
     {
-        var limit = NormalizeLimit(req.Limit);
+        var limit = NormalizeLimit(req.Limit ?? 1000);
         
         // v48: 支持游标分页
         var (points, hasMore) = await repo.QueryWithCursorAsync(

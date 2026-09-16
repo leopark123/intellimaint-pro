@@ -49,18 +49,24 @@ try
     // Add HttpClient for API calls
     builder.Services.AddHttpClient("ApiClient", client =>
     {
+        var key = builder.Configuration["Edge:ApiKey"];
+        if (!string.IsNullOrWhiteSpace(key)) client.DefaultRequestHeaders.Add("X-Edge-Key", key);
         client.Timeout = TimeSpan.FromSeconds(10);
     });
 
     // v65: HttpClient for config sync
     builder.Services.AddHttpClient("ConfigSync", client =>
     {
+        var key = builder.Configuration["Edge:ApiKey"];
+        if (!string.IsNullOrWhiteSpace(key)) client.DefaultRequestHeaders.Add("X-Edge-Key", key);
         client.Timeout = TimeSpan.FromSeconds(10);
     });
 
     // v65: HttpClient for telemetry upload
     builder.Services.AddHttpClient("Telemetry", client =>
     {
+        var key = builder.Configuration["Edge:ApiKey"];
+        if (!string.IsNullOrWhiteSpace(key)) client.DefaultRequestHeaders.Add("X-Edge-Key", key);
         client.Timeout = TimeSpan.FromSeconds(30);
     });
 
@@ -88,6 +94,7 @@ try
 catch (Exception ex)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
+    throw;
 }
 finally
 {

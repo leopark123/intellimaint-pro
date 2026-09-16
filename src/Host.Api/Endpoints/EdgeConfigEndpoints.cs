@@ -13,7 +13,8 @@ public static class EdgeConfigEndpoints
     public static void MapEdgeConfigEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/edge-config")
-            .WithTags("Edge配置管理");
+            .WithTags("Edge配置管理")
+            .RequireAuthorization("EdgeRead");
 
         // 获取所有 Edge 列表
         group.MapGet("/", ListEdges)
@@ -63,6 +64,7 @@ public static class EdgeConfigEndpoints
         // 更新 Edge 状态（心跳）
         group.MapPost("/{edgeId}/heartbeat", UpdateEdgeHeartbeat)
             .WithName("UpdateEdgeHeartbeat")
+            .RequireAuthorization("EdgeWrite")
             .WithSummary("Edge心跳上报")
             .Produces<ApiResponse<object>>();
 

@@ -8,7 +8,7 @@ namespace IntelliMaint.Infrastructure.Protocols.OpcUa;
 
 /// <summary>
 /// One Session per endpoint. Prefer session recovery (SessionReconnectHandler) over rebuild.
-/// Security (MVP): auto-trust server cert for internal networks.
+/// Server certificates must be provisioned into the trusted peer/issuer stores.
 /// </summary>
 public sealed class OpcUaSessionManager : IAsyncDisposable
 {
@@ -86,7 +86,7 @@ public sealed class OpcUaSessionManager : IAsyncDisposable
                         StoreType = "Directory",
                         StorePath = "pki/rejected"
                     },
-                    AutoAcceptUntrustedCertificates = true,
+                    AutoAcceptUntrustedCertificates = false,
                     AddAppCertToTrustedStore = true
                 },
                 TransportQuotas = new TransportQuotas
@@ -110,8 +110,8 @@ public sealed class OpcUaSessionManager : IAsyncDisposable
             cfg.CertificateValidator = new CertificateValidator();
             cfg.CertificateValidator.CertificateValidation += (_, e) =>
             {
-                // MVP: auto-trust (internal network). Production should pin trust.
-                e.Accept = true;
+                // Fail closed for every validation error, including expiry and untrusted peers.
+                e.Accept = false;
             };
 
             await cfg.Validate(ApplicationType.Client).ConfigureAwait(false);

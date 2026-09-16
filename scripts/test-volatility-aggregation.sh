@@ -1,4 +1,7 @@
 #!/bin/bash
+: "${ADMIN_USERNAME:?Set ADMIN_USERNAME}"
+: "${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}"
+export ADMIN_USERNAME ADMIN_PASSWORD
 # 测试波动告警和告警聚合功能
 # 使用方法: bash scripts/test-volatility-aggregation.sh
 
@@ -13,15 +16,16 @@ echo ""
 echo "=== 1. 登录获取 Token ==="
 LOGIN_RESP=$(curl -s -X POST "$API_BASE/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}')
+  -d "$(node -e 'process.stdout.write(JSON.stringify({username:process.env.ADMIN_USERNAME,password:process.env.ADMIN_PASSWORD}))')")
 
-TOKEN=$(echo $LOGIN_RESP | python -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('accessToken',''))" 2>/dev/null)
+TOKEN=$(printf '%s' "$LOGIN_RESP" | python -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token',''))" 2>/dev/null)
+unset LOGIN_RESP
 
 if [ -z "$TOKEN" ]; then
-  echo "登录失败: $LOGIN_RESP"
+  echo "登录失败，未取得访问凭据。"
   exit 1
 fi
-echo "Token 获取成功 (前50字符): ${TOKEN:0:50}..."
+echo "登录成功。"
 echo ""
 
 AUTH="Authorization: Bearer $TOKEN"

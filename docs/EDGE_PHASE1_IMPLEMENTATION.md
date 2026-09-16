@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # Edge Phase 1 实施方案：数据预处理 + 断网续传
 
 > 版本: v1.0
@@ -1493,9 +1495,9 @@ builder.Services.AddHttpClient("NetworkCheck", client =>
 
 | 指标 | 优化前 | 优化后 |
 |------|--------|--------|
-| 数据传输量 | 100% | **30%** (减少70%) |
-| 断网数据丢失 | 100% | **0%** |
-| 网络带宽 | 100% | **50%** (压缩) |
+| 数据传输量 | 未测量 | **未测量** (减少未测量) |
+| 断网数据丢失 | 未测量 | **未测量** |
+| 网络带宽 | 未测量 | **未测量** (压缩) |
 | 存储容量 | N/A | 最大 1GB |
 
 ---

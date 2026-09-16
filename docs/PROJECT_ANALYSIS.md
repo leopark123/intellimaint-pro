@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro 项目深度分析
 
 > 本文档帮助你从零开始理解这个工业预测性维护平台的设计与实现
@@ -57,8 +59,8 @@
 
 | 痛点 | 解决方案 | 价值 |
 |------|----------|------|
-| 设备突然坏了 | 提前 72 小时预警 | 减少停机损失 |
-| 过度维护（没坏也修）| 按实际状态维护 | 降低维护成本 |
+| 设备突然坏了 | 实验性趋势外推；未验证预警提前量 | 潜在维护用途，停机收益未验证 |
+| 过度维护（没坏也修）| 探索按状态维护 | 潜在用途，成本或 ROI 收益未验证 |
 | 设备状态不透明 | 健康指数 0-100 | 一目了然 |
 
 ---
@@ -495,10 +497,12 @@ function SomeComponent() {
 │  ────────────────────────────────────────────────────────────────────►  │
 │  │              │              │              │              │          │
 │  采集         入队          分发          存储/告警       前端显示       │
-│  (1秒/次)    (~1ms)       (~1ms)         (~5ms)         (即时)         │
+│  (1秒/次示例)  (入队)      (分发)       (存储/告警)      (显示)         │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+图中的 1 秒采集周期仅为示例配置；原 1ms/1ms/5ms 耗时与“即时”显示没有基准证据，已撤下。该图只描述处理顺序，不承诺端到端延迟。
 
 ### 5.2 Pipeline 核心设计
 

@@ -1,5 +1,5 @@
 # API Performance Test Script
-$token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6ImFkbWluMDAwMDAwMDAwMSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL25hbWUiOiJhZG1pbiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFkbWluIiwiZGlzcGxheV9uYW1lIjoiQWRtaW5pc3RyYXRvciIsImV4cCI6MTc2NzYxOTQzNCwiaXNzIjoiSW50ZWxsaU1haW50IiwiYXVkIjoiSW50ZWxsaU1haW50In0.F62ONSVykLUkVp5cMW9UEgkz6nsC6ARBq4zTpvjUfqY"
+$token = $env:ACCESS_TOKEN
 $baseUrl = "http://localhost:5000/api"
 $headers = @{
     "Authorization" = "Bearer $token"

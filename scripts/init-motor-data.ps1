@@ -7,13 +7,14 @@ $ApiBase = "http://localhost:5000/api"
 # 1. 登录获取 Token
 Write-Host "=== 1. 登录获取 Token ===" -ForegroundColor Cyan
 $loginBody = @{
-    username = "admin"
-    password = "admin123"
+    username = $env:ADMIN_USERNAME
+    password = $env:ADMIN_PASSWORD
 } | ConvertTo-Json
 
 $loginResult = Invoke-RestMethod -Uri "$ApiBase/auth/login" -Method Post -Body $loginBody -ContentType "application/json"
-$token = $loginResult.token
-Write-Host "Token obtained: $($token.Substring(0, 50))..." -ForegroundColor Green
+$token = $loginResult.data.token
+if ([string]::IsNullOrWhiteSpace($token)) { throw "Authentication failed: no access credential returned" }
+Write-Host "Authentication succeeded" -ForegroundColor Green
 
 $headers = @{
     "Authorization" = "Bearer $token"

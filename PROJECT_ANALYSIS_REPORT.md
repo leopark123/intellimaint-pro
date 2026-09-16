@@ -1,4 +1,8 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro v56 - 项目分析报告
+
+本文安全/架构分数、星级及问题数量为历史主观估计，无可复现量表或验收依据。代码规模数字未绑定提交和统计命令，也仅作为历史估计保留；不是当前测量结果、生产等级或安全认证。未来覆盖率目标是设计目标，不能当作已取得的覆盖率。
 
 ## 概要
 
@@ -288,7 +292,7 @@
 | **可测试性** | ⭐⭐⭐ | 基础设施好，覆盖待提升 |
 | **文档** | ⭐⭐⭐ | CLAUDE.md 完善，API 文档待补充 |
 
-**整体评分**: ⭐⭐⭐⭐ (4/5) - **生产就绪，持续改进中**
+**整体评分**: ⭐⭐⭐⭐ (4/5) - **历史标签（当前未验证），持续改进中**
 
 ---
 

@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro v41 系列变更日志
 
 ## 版本信息
@@ -86,7 +88,7 @@ npm run dev
 http://localhost:3000
 ```
 
-**默认账号**: admin / admin123
+**默认账号**: admin / [removed legacy password]
 
 ---
 

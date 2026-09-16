@@ -5,8 +5,8 @@
 #
 
 BASE_URL="${1:-http://localhost:5000}"
-USERNAME="admin"
-PASSWORD="admin123"
+USERNAME="${ADMIN_USERNAME:?Set ADMIN_USERNAME}"
+PASSWORD="${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}"
 
 # 颜色
 GREEN='\033[0;32m'
@@ -94,7 +94,7 @@ test_jwt() {
         pass "登录成功，获取 Token"
     else
         fail "登录失败"
-        echo "响应: $LOGIN_RESPONSE"
+        echo "认证响应未输出，以免泄露凭据。"
         exit 1
     fi
     

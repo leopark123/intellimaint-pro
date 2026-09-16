@@ -97,22 +97,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<JwtService>();
 
-        // 优先级: 环境变量 > appsettings.json
-        var jwtSecretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
-            ?? configuration["Jwt:SecretKey"]
-            ?? throw new InvalidOperationException(
-                "JWT_SECRET_KEY environment variable or Jwt:SecretKey config is required");
-
-        if (jwtSecretKey.Length < SystemConstants.Auth.MinSecretKeyLength)
-        {
-            throw new InvalidOperationException(
-                $"JWT secret key must be at least {SystemConstants.Auth.MinSecretKeyLength} characters");
-        }
-
-        Log.Information("JWT configured. SecretKey source: {Source}",
-            Environment.GetEnvironmentVariable("JWT_SECRET_KEY") != null
-                ? "Environment Variable"
-                : "appsettings.json");
+        var jwtSecretKey = JwtService.ResolveSecretKey(configuration);
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -175,6 +160,7 @@ public static class ServiceCollectionExtensions
                 };
             });
 
+        services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, EdgeKeyHandler>(EdgeKeyHandler.SchemeName, _ => { });
         return services;
     }
 
@@ -196,6 +182,13 @@ public static class ServiceCollectionExtensions
             // AllAuthenticated: 所有已认证用户（默认策略）
             options.AddPolicy(AuthPolicies.AllAuthenticated, policy =>
                 policy.RequireAuthenticatedUser());
+
+            options.AddPolicy("EdgeRead", policy => policy
+                .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, EdgeKeyHandler.SchemeName)
+                .RequireAuthenticatedUser());
+            options.AddPolicy("EdgeWrite", policy => policy
+                .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, EdgeKeyHandler.SchemeName)
+                .RequireRole("Edge", UserRoles.Admin));
 
             // 设置默认策略为 AllAuthenticated
             options.DefaultPolicy = options.GetPolicy(AuthPolicies.AllAuthenticated)!;

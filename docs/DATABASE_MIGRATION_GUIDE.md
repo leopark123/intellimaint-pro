@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # 数据库迁移指南：SQLite → TimescaleDB
 
 ## 概述
@@ -10,7 +12,7 @@
 - 数据量 < 100GB
 - 单节点部署
 - 写入速率 < 1000 点/秒
-- 查询延迟要求 < 500ms
+> 未验证的定量性能目标已撤回；需要可重复基准测试。
 
 ### 需要迁移到 TimescaleDB 的条件
 - 数据量 > 100GB 或快速增长
@@ -313,14 +315,17 @@ public sealed class TimescaleDbTimeSeriesDb : ITimeSeriesDb
 3. 重启应用
 4. 保留 TimescaleDB 数据用于调试
 
-## 性能对比
+## 性能比较的证据边界
 
-| 操作 | SQLite | TimescaleDB | 提升 |
-|------|--------|-------------|------|
-| 写入 1000 点 | 50ms | 20ms | 2.5x |
-| 查询 24h 数据 | 200ms | 50ms | 4x |
-| 聚合查询 | 500ms | 30ms | 16x |
-| 压缩后存储 | 1GB | 200MB | 5x |
+原文的吞吐、延迟、倍数和 1GB 到 200MB 压缩比较没有可复现基准，相关结果已撤下。
+下列数字只定义未来比较的工作负载，不是测得结果，也不承诺 TimescaleDB 更快。
+
+| 比较项 | 数字类别 | 验证状态 |
+|---|---|---|
+| 写入 1000 点 | 合成基准工作负载参数 | 尚未基准测试 |
+| 查询 24h 数据 | 查询窗口参数 | 尚未基准测试 |
+| 聚合查询 | 待定义数据集和查询条件 | 尚未基准测试 |
+| 压缩后存储 | 需要相同原始数据和保留策略 | 无验证结果，不给出压缩比例 |
 
 ## 联系支持
 

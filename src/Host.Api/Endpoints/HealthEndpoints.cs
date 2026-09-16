@@ -31,7 +31,7 @@ public static class HealthEndpoints
         group.MapPost("/snapshot", SaveSnapshotAsync)
             .WithName("SaveHealthSnapshot")
             .WithSummary("保存健康快照（内部调用）")
-            .AllowAnonymous();  // Edge 服务内部调用，无需认证
+            .RequireAuthorization("EdgeWrite");
 
         // v56.2: 数据库健康检查端点
         group.MapGet("/database", GetDatabaseHealthAsync)

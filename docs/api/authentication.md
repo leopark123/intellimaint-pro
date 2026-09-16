@@ -1,3 +1,5 @@
+> Historical API note: may contain stale routes or payloads. Use the running Development Swagger and the source-backed [API index](README.md). Not production or accuracy evidence.
+
 # 认证 API
 
 ## 登录
@@ -9,7 +11,7 @@
 ```json
 {
   "username": "admin",
-  "password": "admin123"
+  "password": "<ADMIN_PASSWORD from your environment>"
 }
 ```
 
@@ -63,10 +65,7 @@
 
 ---
 
-## 默认账号
+## 账户初始化
 
-| 用户名 | 密码 | 角色 |
-|--------|------|------|
-| admin | admin123 | Admin |
-| operator | operator123 | Operator |
-| viewer | viewer123 | Viewer |
+没有内置共享账号。空数据库需要显式配置 ADMIN_USERNAME 和唯一的 ADMIN_PASSWORD 来初始化管理员。
+Operator / Viewer 由管理员通过已认证的用户管理 API 分别创建；不会共享 bootstrap 密码。

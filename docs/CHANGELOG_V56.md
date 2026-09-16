@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro v56 变更日志
 
 ## 版本信息
@@ -33,7 +35,7 @@
 -- 修改前：扫描全表 + ROW_NUMBER 排序（30秒+）
 ROW_NUMBER() OVER (PARTITION BY device_id, tag_id ORDER BY ts DESC)
 
--- 修改后：只查最近5分钟 + MAX 子查询（<100ms）
+-- 修改后：只查最近5分钟 + MAX 子查询（性能未测量）
 SELECT ... FROM telemetry t
 INNER JOIN (
     SELECT device_id, tag_id, MAX(ts) as max_ts
@@ -47,7 +49,7 @@ INNER JOIN (
 -- 修改前：扫描整个 telemetry 表（30秒+）
 SELECT ... FROM telemetry GROUP BY device_id, tag_id
 
--- 修改后：从 tag 表读取（<10ms）
+-- 修改后：从 tag 表读取（性能未测量）
 SELECT ... FROM tag WHERE enabled = 1
 ```
 
@@ -138,10 +140,10 @@ CREATE TABLE aggregate_state (
 
 | 操作 | 修复前 | 修复后 | 提升 |
 |------|--------|--------|------|
-| GetLatestAsync | 30秒+ | <100ms | 300x |
-| GetTagsAsync | 30秒+ | <10ms | 3000x |
-| 登录 | 超时 | <100ms | ∞ |
-| Dashboard | 超时 | <200ms | ∞ |
+| GetLatestAsync | 30秒+ | 未测量 | 未测量 |
+| GetTagsAsync | 30秒+ | 未测量 | 未测量 |
+| 登录 | 超时 | 未测量 | 未测量 |
+| Dashboard | 超时 | 未测量 | 未测量 |
 
 ---
 

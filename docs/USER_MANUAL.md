@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro 用户手册
 
 > 版本：v56 | 更新日期：2026-01-14
@@ -23,14 +25,14 @@
 
 ### 1.1 功能简介
 
-IntelliMaint Pro 是一个工业 AI 预测性维护平台，核心功能包括：
+IntelliMaint Pro 包含工业遥测与启发式状态分析代码。下表说明软件路径，不代表预测准确性或现场验证：
 
 | 功能模块 | 说明 |
 |----------|------|
-| 实时监控 | 毫秒级数据采集与推送 |
+| 实时监控 | 数据采集与推送；端到端延迟尚未基准测试 |
 | 健康评估 | 设备健康指数 0-100 |
 | 智能告警 | 多级阈值告警引擎 |
-| 故障预测 | 电机故障提前预警 |
+| 故障预测 | 实验性诊断与趋势外推；预警提前量未验证 |
 
 ### 1.2 系统架构
 
@@ -60,9 +62,9 @@ IntelliMaint Pro 是一个工业 AI 预测性维护平台，核心功能包括�
 
 | 角色 | 用户名 | 密码 | 权限 |
 |------|--------|------|------|
-| 管理员 | admin | admin123 | 全部权限 |
-| 操作员 | operator | operator123 | 操作权限 |
-| 查看者 | viewer | viewer123 | 只读权限 |
+| 管理员 | admin | [removed legacy password] | 全部权限 |
+| 操作员 | operator | [removed legacy password] | 操作权限 |
+| 查看者 | viewer | [removed legacy password] | 只读权限 |
 
 ---
 
@@ -274,14 +276,14 @@ IntelliMaint Pro 是一个工业 AI 预测性维护平台，核心功能包括�
 
 **路径**: 电机配置 → 选择实例 → 操作模式
 
-不同工况下电机参数基线不同，需分别建模：
+不同工况下电机参数基线不同，需分别建模。下表为合成配置示例；转速、电流和频率是示例工程参数，不是通用现场设定或性能测量：
 
 | 模式 | 触发条件示例 | 说明 |
 |------|--------------|------|
 | 空载运行 | Speed: 1450-1500 RPM | 无负载启动 |
 | 轻载运行 | Current: 10-15 A | 低负载工况 |
 | 满载运行 | Current: 25-30 A | 额定负载 |
-| 变频50% | Frequency: 25 Hz | 变频器半速 |
+| 变频50% | Frequency: 25 Hz | 示例以 50 Hz 为参考，25 Hz 为其 50% |
 
 **触发条件设置**:
 - 选择触发标签（如 Running 或 Speed）
@@ -462,7 +464,9 @@ END_IF;
 
 ##### 简化方案：按负载+速度分类
 
-| 模式名称 | 触发标签 | Min | Max | 典型电流范围 |
+下表电流范围为合成工况示例（额定电流百分比），不是现场测量、保护阈值或设备控制指令。
+
+| 模式名称 | 触发标签 | Min | Max | 示例电流范围 |
 |----------|----------|-----|-----|--------------|
 | 重载高速 | 定位车.WorkMode | 11 | 11 | 80-100% |
 | 重载低速 | 定位车.WorkMode | 12 | 12 | 60-80% |

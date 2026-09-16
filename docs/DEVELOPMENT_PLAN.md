@@ -1,10 +1,12 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro 完整开发计划
 
 ## 项目概述
 
 **项目名称**：IntelliMaint Pro - 工业数据采集与监控平台  
 **当前版本**：v21  
-**目标版本**：v1.0.0 (生产就绪)
+**目标版本**：v1.0.0 (历史标签（当前未验证）)
 
 ---
 
@@ -369,7 +371,7 @@ Day 9+: B-36 Modbus（如需要）
 | v25-v27 | UI 完善 | +2 天 |
 | v28-v30 | 告警 + 导出 | +2 天 |
 | v1.0.0-beta | 功能完整 | +6 天 |
-| v1.0.0 | 生产就绪 | +7 天 |
+| v1.0.0 | 历史标签（当前未验证） | +7 天 |
 
 ---
 

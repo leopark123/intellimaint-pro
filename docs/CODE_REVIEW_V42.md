@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro 代码审查报告
 
 **审查日期**: 2025-12-30  
@@ -97,7 +99,7 @@ public sealed class TelemetryHub : Hub
 
 ```json
 "Jwt": {
-  "SecretKey": "IntelliMaint-Pro-Secret-Key-2024-Must-Be-At-Least-32-Chars"
+  "SecretKey": "<historical signing secret removed>"
 }
 ```
 

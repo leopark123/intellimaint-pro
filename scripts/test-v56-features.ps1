@@ -8,13 +8,14 @@ Write-Host "=== v56 功能测试 ===" -ForegroundColor Cyan
 # 1. 登录
 Write-Host "`n[1] 登录获取 Token..." -ForegroundColor Yellow
 $loginBody = @{
-    username = "admin"
-    password = "admin123"
+    username = $env:ADMIN_USERNAME
+    password = $env:ADMIN_PASSWORD
 } | ConvertTo-Json
 
 $loginResponse = Invoke-RestMethod -Uri "$baseUrl/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json"
-$token = $loginResponse.data.accessToken
-Write-Host "登录成功! Token: $($token.Substring(0, 20))..." -ForegroundColor Green
+$token = $loginResponse.data.token
+if ([string]::IsNullOrWhiteSpace($token)) { throw "Authentication failed: no access credential returned" }
+Write-Host "登录成功。" -ForegroundColor Green
 
 $headers = @{
     "Authorization" = "Bearer $token"

@@ -234,17 +234,7 @@ CREATE INDEX idx_user_enabled ON "user" (enabled) WHERE enabled = TRUE;
 
 COMMENT ON TABLE "user" IS '用户账户表';
 
--- 插入默认管理员账户 (密码: admin123, 首次登录需修改密码)
-INSERT INTO "user" (user_id, username, password_hash, role, enabled, created_utc, must_change_password)
-VALUES (
-    'admin0000000001',
-    'admin',
-    'JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=',
-    'Admin',
-    TRUE,
-    EXTRACT(EPOCH FROM NOW()) * 1000,
-    TRUE
-);
+-- No default accounts. The API bootstraps the first administrator from environment variables.
 
 -- ==================== 审计日志表 ====================
 CREATE TABLE audit_log (

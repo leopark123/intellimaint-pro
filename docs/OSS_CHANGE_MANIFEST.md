@@ -1,0 +1,182 @@
+# OSS change manifest
+
+Baseline: `759ba66`. Local changes only; no commits or push. Generated dependencies, build outputs,
+local databases, logs and `.env` are ignored and excluded. No core business source file was deleted.
+This inventory includes the narrowly scoped pre-commit remediation; the reverted blanket HTTP exception
+mapping is no longer a difference from the baseline.
+
+## Modified (111)
+
+- `.claude/agents/testing-expert.md`
+- `.dockerignore`
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `.gitignore`
+- `CLAUDE.md`
+- `DEPLOYMENT_REPORT.md`
+- `PROJECT_ANALYSIS_REPORT.md`
+- `README.md`
+- `docker/.env.example`
+- `docker/Dockerfile.api`
+- `docker/Dockerfile.ui`
+- `docker/docker-compose.timescaledb.yml`
+- `docker/docker-compose.yml`
+- `docker/init-scripts/02-schema.sql`
+- `docker/init-scripts/07-seed-data.sql`
+- `docker/nginx.conf`
+- `docs/CHANGELOG.md`
+- `docs/CHANGELOG_V39.md`
+- `docs/CHANGELOG_V41.md`
+- `docs/CHANGELOG_V46.md`
+- `docs/CHANGELOG_V47.md`
+- `docs/CHANGELOG_V48.md`
+- `docs/CHANGELOG_V49.md`
+- `docs/CHANGELOG_V50.md`
+- `docs/CHANGELOG_V51.md`
+- `docs/CHANGELOG_V52.md`
+- `docs/CHANGELOG_V53.md`
+- `docs/CHANGELOG_V54.md`
+- `docs/CHANGELOG_V55.md`
+- `docs/CHANGELOG_V56.md`
+- `docs/CODE_REVIEW_V42.md`
+- `docs/COMPREHENSIVE_PROJECT_ANALYSIS.md`
+- `docs/DATABASE_MIGRATION_GUIDE.md`
+- `docs/DEVELOPMENT_PLAN.md`
+- `docs/DEVELOPMENT_PLAN_V42.md`
+- `docs/EDGE_OPTIMIZATION_PLAN.md`
+- `docs/EDGE_PHASE1_IMPLEMENTATION.md`
+- `docs/EDGE_PHASE1_REVISED.md`
+- `docs/PROJECT_ANALYSIS.md`
+- `docs/PROJECT_ANALYSIS_REPORT.md`
+- `docs/PROJECT_KNOWLEDGE.md`
+- `docs/REVIEW_GUIDE.md`
+- `docs/USER_MANUAL.md`
+- `docs/api/README.md`
+- `docs/api/alarm-rules.md`
+- `docs/api/alarms.md`
+- `docs/api/audit-logs.md`
+- `docs/api/authentication.md`
+- `docs/api/devices.md`
+- `docs/api/tags.md`
+- `docs/api/telemetry.md`
+- `docs/api/users.md`
+- `docs/v38-permission-matrix.md`
+- `docs/商业落地计划.md`
+- `docs/项目汇报-IntelliMaint智能维护平台.md`
+- `intellimaint-ui/package-lock.json`
+- `intellimaint-ui/package.json`
+- `intellimaint-ui/src/components/Layout/MainLayout.tsx`
+- `intellimaint-ui/src/pages/AnomalyDetection/index.tsx`
+- `intellimaint-ui/src/pages/Dashboard/index.tsx`
+- `intellimaint-ui/src/pages/KnowledgeGraph/index.tsx`
+- `intellimaint-ui/src/pages/Login/index.tsx`
+- `intellimaint-ui/src/pages/ModelOptimization/index.tsx`
+- `intellimaint-ui/src/pages/PredictiveMaintenance/index.tsx`
+- `scripts/fix-mode-duration.ps1`
+- `scripts/fix-mode-range.ps1`
+- `scripts/init-motor-data.ps1`
+- `scripts/init_motor_data.py`
+- `scripts/migrate-to-timescaledb.ps1`
+- `scripts/test-alarm-rules.ps1`
+- `scripts/test-all-apis.ps1`
+- `scripts/test-api-perf.ps1`
+- `scripts/test-diagnosis-detail.ps1`
+- `scripts/test-health-perf.ps1`
+- `scripts/test-health-perf.sh`
+- `scripts/test-mode-detection.ps1`
+- `scripts/test-motor-api.ps1`
+- `scripts/test-motor-detail.ps1`
+- `scripts/test-tags-api.ps1`
+- `scripts/test-telemetry.ps1`
+- `scripts/test-v56-features.ps1`
+- `scripts/test-volatility-aggregation.sh`
+- `src/Host.Api/Endpoints/EdgeConfigEndpoints.cs`
+- `src/Host.Api/Endpoints/HealthEndpoints.cs`
+- `src/Host.Api/Endpoints/TelemetryEndpoints.cs`
+- `src/Host.Api/Extensions/ServiceCollectionExtensions.cs`
+- `src/Host.Api/IntelliMaint.Host.Api.csproj`
+- `src/Host.Api/Models/TelemetryModels.cs`
+- `src/Host.Api/Program.cs`
+- `src/Host.Api/appsettings.Production.json`
+- `src/Host.Api/appsettings.json`
+- `src/Host.Edge/IntelliMaint.Host.Edge.csproj`
+- `src/Host.Edge/Program.cs`
+- `src/Host.Edge/appsettings.json`
+- `src/Host.Edge/data/intellimaint.sqbpro`
+- `src/Infrastructure/Protocols/LibPlcTag/IntelliMaint.Infrastructure.Protocols.LibPlcTag.csproj`
+- `src/Infrastructure/Protocols/OpcUa/IntelliMaint.Infrastructure.Protocols.OpcUa.csproj`
+- `src/Infrastructure/Protocols/OpcUa/OpcUaSessionManager.cs`
+- `src/Infrastructure/Security/JwtService.cs`
+- `src/Infrastructure/Sqlite/IntelliMaint.Infrastructure.Sqlite.csproj`
+- `src/Infrastructure/Sqlite/SchemaManager.cs`
+- `src/Infrastructure/Sqlite/SqliteConnectionFactory.cs`
+- `tests/Integration/ApiTestFixture.cs`
+- `tests/Integration/IntelliMaint.Tests.Integration.csproj`
+- `tests/Test-SecurityV44.ps1`
+- `tests/Unit/IntelliMaint.Tests.Unit.csproj`
+- `tests/test-security-v44.html`
+- `tests/test-security-v44.sh`
+- `tools/DataMigration/DataMigration.csproj`
+- `tools/DataMigration/Program.cs`
+
+## New (46)
+
+- `.env.example`
+- `.github/ISSUE_TEMPLATE/bug_report.yml`
+- `.github/ISSUE_TEMPLATE/config.yml`
+- `.github/ISSUE_TEMPLATE/feature_request.yml`
+- `.github/pull_request_template.md`
+- `AGENTS.md`
+- `CHANGELOG.md`
+- `CODE_OF_CONDUCT.md`
+- `CONTRIBUTING.md`
+- `Directory.Build.props`
+- `LICENSE`
+- `SECURITY.md`
+- `compose.yaml`
+- `docs/CODEX_OSS_APPLICATION.md`
+- `docs/FEATURE_MATRIX.md`
+- `docs/OSS_AUDIT.md`
+- `docs/OSS_CHANGE_MANIFEST.md`
+- `docs/OSS_READINESS_REPORT.md`
+- `docs/README.md`
+- `docs/RELEASE_CHECKLIST.md`
+- `docs/architecture.md`
+- `docs/configuration.md`
+- `docs/development.md`
+- `docs/images/synthetic-demo-dashboard.png`
+- `docs/installation.md`
+- `docs/protocols.md`
+- `docs/testing.md`
+- `docs/troubleshooting.md`
+- `docs/verification.json`
+- `global.json`
+- `intellimaint-ui/eslint.config.js`
+- `intellimaint-ui/src/components/ProtectedRoute/index.test.tsx`
+- `intellimaint-ui/src/components/SyntheticNotice.tsx`
+- `src/Host.Api/Services/AdminBootstrap.cs`
+- `src/Host.Api/Services/EdgeKeyHandler.cs`
+- `src/Host.Api/Services/SensitiveQueryStringEnricher.cs`
+- `src/Host.Api/Services/SyntheticDemoService.cs`
+- `tests/Integration/DemoSecurityTests.cs`
+- `tests/Integration/RequestLoggingTests.cs`
+- `tests/Unit/AdminBootstrapTests.cs`
+- `tests/Unit/DemoAndFftTests.cs`
+- `tools/check-docs.mjs`
+- `tools/demo/README.md`
+- `tools/demo/init.mjs`
+- `tools/demo/run.mjs`
+- `tools/demo/smoke.mjs`
+
+## Removed (8)
+
+- `.claude/settings.local.json`
+- `docs/claude续借对话.docx`
+- `docs/商业分析.docx`
+- `intellimaint-ui/tsconfig.node.tsbuildinfo`
+- `intellimaint-ui/tsconfig.tsbuildinfo`
+- `intellimaint-ui/vite.config.d.ts`
+- `intellimaint-ui/vite.config.js`
+- `scripts/login.json`
+
+See [readiness report](OSS_READINESS_REPORT.md) for rationale, security impact, tests, remaining work and suggested commit boundaries.

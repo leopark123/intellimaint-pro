@@ -1,6 +1,6 @@
 # Check current telemetry values
 
-$loginBody = @{ username = "admin"; password = "admin123" } | ConvertTo-Json
+$loginBody = @{ username = $env:ADMIN_USERNAME; password = $env:ADMIN_PASSWORD } | ConvertTo-Json
 $loginResult = Invoke-RestMethod -Uri "http://localhost:5000/api/auth/login" -Method Post -ContentType "application/json" -Body $loginBody
 $token = $loginResult.data.token
 $headers = @{ Authorization = "Bearer $token" }

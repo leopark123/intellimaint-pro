@@ -2,6 +2,7 @@
 # Build stage
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
+COPY Directory.Build.props global.json ./
 
 # Copy csproj files and restore
 COPY src/Core/*.csproj ./Core/

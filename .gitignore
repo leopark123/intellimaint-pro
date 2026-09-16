@@ -119,3 +119,12 @@ packages/
 *~
 *.bak
 *.log
+
+# Local credentials, protocol certificates and generated configuration
+pki/
+.demo/
+*.tsbuildinfo
+intellimaint-ui/vite.config.js
+intellimaint-ui/vite.config.d.ts
+scripts/login.json
+.claude/settings.local.json

@@ -30,7 +30,9 @@ public sealed class SqliteConnectionFactory : ISqliteConnectionFactory
     
     public SqliteConnectionFactory(IOptions<EdgeOptions> options, ILogger<SqliteConnectionFactory> logger)
     {
-        DatabasePath = options.Value.DatabasePath;
+        DatabasePath = !string.IsNullOrWhiteSpace(options.Value.DatabasePath)
+            ? options.Value.DatabasePath
+            : throw new InvalidOperationException("Edge:DatabasePath is required for SQLite.");
         _connectionString = BuildConnectionString(DatabasePath);
         _logger = logger;
         

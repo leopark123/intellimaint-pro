@@ -146,7 +146,7 @@ export default function LoginPage() {
             margin: 0,
             transition: 'color 0.3s'
           }}>
-            工业AI预测性维护系统
+            工业遥测与设备状态监测
           </p>
         </div>
 
@@ -230,7 +230,7 @@ export default function LoginPage() {
               color: 'var(--color-text-dim)',
               margin: 0
             }}>
-              默认账户：<span style={{ color: 'var(--color-text-muted)' }}>admin</span> / <span style={{ color: 'var(--color-text-muted)' }}>admin123</span>
+              使用首次启动时配置的管理员账号；没有公共默认密码。
             </p>
           </div>
         )}
@@ -246,7 +246,7 @@ export default function LoginPage() {
         fontSize: 12,
         transition: 'color 0.3s'
       }}>
-        IntelliMaint Pro v2.0 © 2025
+        IntelliMaint Pro · pre-1.0
       </div>
     </div>
   )

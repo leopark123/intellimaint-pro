@@ -15,7 +15,7 @@ param(
     [string]$PgPort = "5432",
     [string]$PgDb = "intellimaint",
     [string]$PgUser = "intellimaint",
-    [string]$PgPassword = "IntelliMaint2024!",
+    [string]$PgPassword = $env:POSTGRES_PASSWORD,
     [int]$BatchSize = 10000,
     [switch]$DryRun
 )

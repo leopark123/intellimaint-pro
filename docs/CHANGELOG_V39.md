@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro v39 - Token 刷新机制
 
 ## 版本信息
@@ -127,7 +129,7 @@ ALTER TABLE user ADD COLUMN refresh_token_expires_utc INTEGER;
 ```bash
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"[removed legacy password]"}'
 ```
 
 ### 2. 刷新 Token
@@ -154,13 +156,10 @@ curl -X POST http://localhost:5000/api/auth/logout \
 
 ---
 
-## 生产就绪评估
+## 历史标签（当前未验证）评估
 
-| 维度 | v38 得分 | v39 得分 | 变化 |
-|------|----------|----------|------|
-| 功能完整性 | 90% | 95% | +5% |
-| 安全性 | 85% | 95% | +10% |
-| 总分 | 76/100 | **82/100** | +6 |
+原功能完整性、安全性百分比和总分均无量表或验证证据，评分比较已撤下。
+下列条目仅记录当时的开发计划/状态，不构成安全认证或当前测试覆盖结论。
 
 ### P0 问题修复状态
 

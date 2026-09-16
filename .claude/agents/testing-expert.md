@@ -254,7 +254,7 @@ public class ApiTestFixture : IDisposable
     private async Task<string> GetAdminTokenAsync()
     {
         var response = await Client.PostAsJsonAsync("/api/auth/login", 
-            new { Username = "admin", Password = "admin123" });
+            new { Username = "admin", Password = "<ADMIN_PASSWORD from your environment>" });
         var result = await response.Content.ReadFromJsonAsync<LoginResult>();
         return result!.Token;
     }

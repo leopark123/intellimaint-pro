@@ -1,3 +1,4 @@
+import SyntheticNotice from "../../components/SyntheticNotice"
 import { Target, TrendingUp, Zap, RefreshCw } from 'lucide-react'
 import {
   LineChart,
@@ -51,6 +52,7 @@ export default function ModelOptimization() {
 
   return (
     <div>
+      <SyntheticNotice />
       {/* 页面标题 */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 8px 0' }}>

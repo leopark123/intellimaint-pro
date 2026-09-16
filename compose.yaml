@@ -1,0 +1,31 @@
+# Local hardware-free demonstration. Synthetic Demo Data; not a production deployment.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5000
+      DatabaseProvider: Sqlite
+      Edge__DatabasePath: /app/data/demo.db
+      Demo__Enabled: 'true'
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Run node tools/demo/init.mjs first}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?Administrator name required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Administrator password required}
+    ports:
+      - '127.0.0.1:5000:5000'
+    volumes:
+      - demo-data:/app/data
+  ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ui
+      args:
+        VITE_DEMO_MODE: 'true'
+    ports:
+      - '127.0.0.1:8080:80'
+    depends_on:
+      - api
+volumes:
+  demo-data:

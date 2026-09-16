@@ -320,13 +320,7 @@ CREATE INDEX IF NOT EXISTS idx_user_username ON user(username);
 
         await ExecuteAsync(conn, createTable, ct);
 
-        // 默认管理员 admin/admin123（password_hash 为 SHA256+Base64）
-        const string defaultAdmin = @"
-INSERT OR IGNORE INTO user (user_id, username, password_hash, display_name, role, enabled, created_utc)
-VALUES ('admin0000000001', 'admin', 'JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=', 'Administrator', 'Admin', 1, 0);
-";
-
-        await ExecuteAsync(conn, defaultAdmin, ct);
+        // Accounts are provisioned explicitly by the API first-run bootstrap.
 
         var appliedUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await ExecuteAsync(conn,

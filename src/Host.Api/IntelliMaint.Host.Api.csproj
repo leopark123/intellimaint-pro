@@ -12,12 +12,14 @@
     <PackageReference Include="MediatR" Version="12.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.22" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.6" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Core\IntelliMaint.Core.csproj" />
+    <ProjectReference Include="..\Infrastructure\Pipeline\IntelliMaint.Infrastructure.Pipeline.csproj" />
     <ProjectReference Include="..\Application\IntelliMaint.Application.csproj" />
     <ProjectReference Include="..\Infrastructure\Sqlite\IntelliMaint.Infrastructure.Sqlite.csproj" />
     <ProjectReference Include="..\Infrastructure\TimescaleDb\IntelliMaint.Infrastructure.TimescaleDb.csproj" />

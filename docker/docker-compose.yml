@@ -5,14 +5,19 @@ services:
     container_name: intellimaint-timescaledb
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: intellimaint
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-IntelliMaint2024!}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       POSTGRES_DB: intellimaint
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
+      - ./init-scripts/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./init-scripts/02-schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+      - ./init-scripts/03-alarm-optimization.sql:/docker-entrypoint-initdb.d/03-alarm-optimization.sql:ro
+      - ./init-scripts/04-timescaledb-optimization.sql:/docker-entrypoint-initdb.d/04-timescaledb-optimization.sql:ro
+      - ./init-scripts/05-schema-sync.sql:/docker-entrypoint-initdb.d/05-schema-sync.sql:ro
+      - ./init-scripts/06-motor-fault-prediction.sql:/docker-entrypoint-initdb.d/06-motor-fault-prediction.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U intellimaint"]
       interval: 10s
@@ -39,13 +44,16 @@ services:
     container_name: intellimaint-api
     restart: unless-stopped
     ports:
-      - "5001:5000"
+      - "127.0.0.1:5001:5000"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5000
       - DatabaseProvider=TimescaleDb
-      - ConnectionStrings__TimescaleDb=Host=timescaledb;Port=5432;Database=intellimaint;Username=intellimaint;Password=${POSTGRES_PASSWORD:-IntelliMaint2024!}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-IntelliMaint-Pro-Secret-Key-2024-Must-Be-At-Least-32-Chars}
+      - ConnectionStrings__TimescaleDb=Host=timescaledb;Port=5432;Database=intellimaint;Username=intellimaint;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:?Set ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+      - Edge__ApiKey=${EDGE_API_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY}
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -61,7 +69,7 @@ services:
     container_name: intellimaint-ui
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
       - api
     networks:

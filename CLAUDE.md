@@ -4,19 +4,19 @@
 
 ## 项目概述
 
-**IntelliMaint Pro** 是一个工业 AI 预测性维护平台，用于实时监控工业设备、采集传感器数据、评估设备健康状态、预测潜在故障。
+**IntelliMaint Pro** 是 pre-1.0 工业遥测与状态监测项目，包含采集、告警、启发式健康评估和实验性趋势预测。当前能力和验证边界以 README.md 与 docs/FEATURE_MATRIX.md 为准。
 
 ### 核心价值
-- 🔍 **实时监控** - 毫秒级数据采集与推送
+- 🔍 **实时监控** - 数据采集与推送；端到端延迟尚未基准测试
 - 🏥 **健康评估** - 设备健康指数 0-100
 - ⚠️ **智能告警** - 多级阈值告警引擎
-- 🔮 **故障预测** - 72+ 小时提前预警
+- 🔮 **故障预测** - 实验性外推；尚未验证预警提前量，不承诺 72+ 小时预警
 
 ## 技术栈
 
 ### 后端
 - **.NET 8** - Minimal API
-- **SQLite** - 开发/MVP 数据库（生产迁移 TimescaleDB）
+- **SQLite** - 当前自动集成测试使用的数据库；TimescaleDB 运行兼容性尚待验证
 - **SignalR** - 实时双向通信
 - **Dapper** - 高性能 ORM
 
@@ -144,9 +144,9 @@ npm run dev
 ```
 
 ### 默认账号
-- Admin: `admin` / `admin123`
-- Operator: `operator` / `operator123`
-- Viewer: `viewer` / `viewer123`
+- Admin: `admin` / `<ADMIN_PASSWORD from your environment>`
+- Operator: `operator` / `<ADMIN_PASSWORD from your environment>`
+- Viewer: `viewer` / `<ADMIN_PASSWORD from your environment>`
 
 ## 开发规范
 

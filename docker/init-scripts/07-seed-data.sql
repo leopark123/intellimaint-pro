@@ -3,15 +3,7 @@
 -- Purpose: Initialize demo data for fresh deployments
 -- Applied after: 06-motor-fault-prediction.sql
 
--- ==================== 1. 默认用户 ====================
-
--- 密码哈希: admin123 (bcrypt)
-INSERT INTO "user" (user_id, username, password_hash, role, display_name, enabled, created_utc, must_change_password)
-VALUES
-    ('admin0000000001', 'admin', '$2a$12$lY3.2k3Rr1wDptBU/Mtl.uNzaCQd/LL99xqntple921fppPgMQp1u', 'Admin', '系统管理员', true, EXTRACT(EPOCH FROM NOW())::BIGINT * 1000, true),
-    ('operator00000001', 'operator', '$2a$12$lY3.2k3Rr1wDptBU/Mtl.uNzaCQd/LL99xqntple921fppPgMQp1u', 'Operator', '操作员', true, EXTRACT(EPOCH FROM NOW())::BIGINT * 1000, true),
-    ('viewer0000000001', 'viewer', '$2a$12$lY3.2k3Rr1wDptBU/Mtl.uNzaCQd/LL99xqntple921fppPgMQp1u', 'Viewer', '观察者', true, EXTRACT(EPOCH FROM NOW())::BIGINT * 1000, true)
-ON CONFLICT (user_id) DO NOTHING;
+-- Accounts are never seeded with public passwords.
 
 -- ==================== 2. 演示设备 ====================
 
@@ -163,6 +155,6 @@ BEGIN
     RAISE NOTICE '  - 2 collection rules';
     RAISE NOTICE '';
     RAISE NOTICE 'Default credentials:';
-    RAISE NOTICE '  admin/admin123, operator/admin123, viewer/admin123';
+    RAISE NOTICE 'Use the administrator credentials you configured at first startup';
     RAISE NOTICE '========================================';
 END $$;

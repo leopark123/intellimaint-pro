@@ -6,9 +6,14 @@ using Npgsql;
 
 Console.WriteLine("=== IntelliMaint SQLite to TimescaleDB Migration Tool (Optimized) ===\n");
 
-// Configuration
-var sqlitePath = args.Length > 0 ? args[0] : @"E:\DAYDAYUP\intellimaint-pro-v56\src\Host.Edge\data\intellimaint.db";
-var pgConnStr = args.Length > 1 ? args[1] : "Host=localhost;Port=5432;Database=intellimaint;Username=intellimaint;Password=IntelliMaint2024!";
+// Explicit inputs avoid machine-local paths and public connection passwords.
+if (args.Length < 1 || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__TimescaleDb")))
+{
+    Console.Error.WriteLine("Usage: DataMigration <sqlite-path>; set ConnectionStrings__TimescaleDb first.");
+    return 1;
+}
+var sqlitePath = args[0];
+var pgConnStr = Environment.GetEnvironmentVariable("ConnectionStrings__TimescaleDb")!;
 
 if (!File.Exists(sqlitePath))
 {

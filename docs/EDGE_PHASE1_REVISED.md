@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # Edge Phase 1 优化方案 (修订版)
 
 > 版本: v2.0
@@ -1326,8 +1328,8 @@ public sealed class ConfigSyncService : BackgroundService
 
 | 指标 | 优化前 | 优化后 |
 |------|--------|--------|
-| 数据传输量 | 100% | **30%** |
-| 断网数据丢失 | 100% | **0%** |
+| 数据传输量 | 未测量 | **未测量** |
+| 断网数据丢失 | 未测量 | **未测量** |
 | 配置修改方式 | 改配置文件重启 | **前端实时修改** |
 | 配置生效时间 | 重启后 | **30秒内热更新** |
 

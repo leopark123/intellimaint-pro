@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro 代码审核指南
 
 > **目的**：记录常见问题模式，指导 ChatGPT 代码生成和 Claude 审核流程
@@ -155,18 +157,9 @@ Login failed for user: admin (401)
 
 **根本原因**：ChatGPT 生成的密码哈希值不正确
 
-**验证方法**：
-```python
-# Python 验证
-import hashlib, base64
-print(base64.b64encode(hashlib.sha256(b'admin123').digest()).decode())
-# 输出: JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=
-```
-
-**正确值**：
-| 密码 | SHA256 + Base64 |
-|------|-----------------|
-| admin123 | `JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=` |
+**验证方法**：使用仅用于测试的随机密码，验证用户仓储创建、正确密码校验和错误密码拒绝行为。
+新密码由仓储使用 BCrypt 加盐哈希；历史 SHA256/Base64 兼容路径不能当作新账户创建方式。
+原固定密码、哈希输出和损坏的“正确值”表已删除；迁移识别旧凭据的逻辑不受影响。
 
 **审核要点**：
 - [ ] 涉及密码哈希时，验证算法和编码是否正确

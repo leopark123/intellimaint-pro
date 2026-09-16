@@ -1,3 +1,5 @@
+> Historical design/development note, retained for context. Claims of production readiness, performance, ROI and deployment are unverified. For current supported behavior and validation, see the repository README and docs/OSS_READINESS_REPORT.md.
+
 # IntelliMaint Pro 项目知识库
 
 > **重要**: 每个 Batch 开发前必须先读取此文件，开发后必须更新此文件。
@@ -193,7 +195,7 @@ intellimaint-pro/
 | QueryAsync 参数签名不匹配 | ChatGPT 使用 `Action<SqliteCommand>` 风格 | 使用匿名对象传参 `new { Key = value }` |
 | IAuditLogRepository.AddAsync 不存在 | ChatGPT 假设有简化方法 | 使用 `CreateAsync(AuditLogEntry entry, CancellationToken ct)` |
 | 全新数据库无 user 表 | SchemaManager v1 后未继续迁移到 v4 | 修复 InitializeAsync：v1 后继续执行 MigrateAsync |
-| admin 登录 401 | ChatGPT 提供的密码哈希错误 | 正确哈希：`JAvlGPq9JyTdtvBO6x2llnRI1+gxwIyPqCKAn3THIKk=` |
+| admin 登录 401 | 历史密码哈希示例错误 | 固定密码和哈希示例已移除；验证仓储的哈希/校验路径，不直接复制凭据到数据库 |
 | IAuditLogRepository.AddAsync 不存在 | ChatGPT 假设有简化方法 | 使用 `CreateAsync(AuditLogEntry entry, CancellationToken ct)` |
 
 ---
@@ -477,7 +479,7 @@ const connection = new HubConnectionBuilder()
 | `LEVEL/PRESSURE/FLOW` | 随机游走 | 平滑波动 |
 | `COUNT/TOTAL/PROD` | 计数器 | 随机递增 |
 | `SETPOINT/RAMP` | 锯齿波 | 周期60s |
-| CipType=BOOL | 切换 | 5%概率翻转 |
+| CipType=BOOL | 切换 | 每次模拟读取有 5% 概率翻转（合成参数；SimulatedTagReader.GenerateToggleValue，不是现场统计） |
 
 ### 前端支持
 

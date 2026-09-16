@@ -13,6 +13,7 @@ using Serilog;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
+    .Enrich.With<SensitiveQueryStringEnricher>()
     .WriteTo.Console()
     .WriteTo.File("logs/api-.log", rollingInterval: RollingInterval.Day)
     .CreateLogger();
@@ -62,12 +63,12 @@ try
         options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
         {
             Title = "IntelliMaint Pro API",
-            Version = "v65",
-            Description = "Industrial AI Predictive Maintenance Platform API",
+            Version = "0.1.0-dev",
+            Description = "Industrial telemetry and condition monitoring API",
             Contact = new Microsoft.OpenApi.Models.OpenApiContact
             {
                 Name = "IntelliMaint Support",
-                Email = "support@intellimaint.com"
+                Url = new Uri("https://github.com/leopark123/intellimaint-pro/issues")
             }
         });
 
@@ -98,6 +99,13 @@ try
         });
     });
     builder.Services.AddHealthChecks();
+    var demoEnabled = builder.Configuration.GetValue<bool>("Demo:Enabled");
+    if (demoEnabled)
+    {
+        if (!builder.Environment.IsDevelopment() || !dbProvider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Synthetic Demo Data requires Development and Sqlite.");
+        builder.Services.AddHostedService<SyntheticDemoService>();
+    }
 
     // P2: SignalR
     builder.Services.AddSignalR(options =>
@@ -105,7 +113,7 @@ try
         options.KeepAliveInterval = TimeSpan.FromSeconds(15);
         options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
         options.HandshakeTimeout = TimeSpan.FromSeconds(15);
-        options.EnableDetailedErrors = true;
+        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
     });
 
     // P2: 搴旂敤灞傛湇鍔★紙缁熶竴娉ㄥ唽锛?
@@ -140,6 +148,8 @@ try
     {
         await SqliteServiceExtensions.InitializeDatabaseAsync(app.Services);
     }
+
+    await AdminBootstrap.InitializeAsync(app.Services, app.Configuration);
 
     // Middleware pipeline
     // v48: 鍏ㄥ眬寮傚父澶勭悊锛堝簲璇ュ湪鏈€澶栧眰锛?
@@ -250,6 +260,7 @@ try
 catch (Exception ex)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
+    throw;
 }
 finally
 {

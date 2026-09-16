@@ -1,3 +1,4 @@
+import SyntheticNotice from "../../components/SyntheticNotice"
 import { Wrench, Clock, Package, DollarSign, Plus, Download } from 'lucide-react'
 import { Button } from 'antd'
 import {
@@ -21,6 +22,7 @@ export default function PredictiveMaintenance() {
 
   return (
     <div>
+      <SyntheticNotice />
       {/* 页面标题 */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 8px 0' }}>
